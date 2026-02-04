@@ -6,14 +6,13 @@ on:
 
 jobs:
   run-tests:
-    name: Test (Python ${{ matrix.python-version }} on ${{ matrix.os }})
+    name: Test (Python 3.13 on ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.11", "3.12"]
 
     steps:
       - name: Checkout code
@@ -22,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |
