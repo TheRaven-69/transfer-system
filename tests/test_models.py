@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from models import Base, User, Wallet, Transaction
+from app.models import Base, User, Wallet, Transaction
 from decimal import Decimal
 
 @pytest.fixture
