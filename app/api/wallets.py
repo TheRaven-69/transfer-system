@@ -1,19 +1,29 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from app.services.wallets import get_wallet_by_id, create_wallet_with_autouser
 
 from app.db.session import get_db
-from app.models import Wallet
 
-from decimal import Decimal
 
-router = APIRouter(prefix="/wallet", tags=["wallets"])
+router = APIRouter(prefix="/wallets", tags=["wallets"])
 
+@router.post("")
+def auto_create(db: Session = Depends(get_db)):
+    wallet = create_wallet_with_autouser(db)
+    return {
+        "wallet": {"id": wallet.id,
+            "balance": wallet.balance,
+            "user_id": wallet.user_id,},
+        "user": {
+            "id": wallet.user.id,
+            "created_at": wallet.user.created_at
+        },   
+    }
+    
 
 @router.get("/{wallet_id}")
 def get_wallet(wallet_id: int, db: Session = Depends(get_db)):
-    wallet = db.get(Wallet, wallet_id)
-    if not wallet:
-        raise HTTPException(status_code=404, detail="Wallet not found")
+    wallet = get_wallet_by_id(db, wallet_id)
     
     return{
         "id": wallet.id,
@@ -21,17 +31,3 @@ def get_wallet(wallet_id: int, db: Session = Depends(get_db)):
         "user_id": wallet.user_id,
     }
 
-
-@router.post("")
-def create_wallet(user_id: int, initial_balance: Decimal = Decimal("0"), db: Session = Depends(get_db)):
-    if initial_balance < 0:
-        raise HTTPException(status_code=400, detail="Initial balance cannot be negative")
-    
-    wallet = Wallet(
-        user_id=user_id,
-        balance = initial_balance,
-    )
-
-    db.add(wallet)
-    db.commit()
-    db.refresh(wallet)
