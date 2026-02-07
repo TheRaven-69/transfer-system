@@ -1,4 +1,8 @@
+from app.db.models import User, Wallet, Transaction
 
+
+def create_transfer():
+    pass
 # TODO: validate transfer amount > 0
 # TODO: prevent transfers to the same wallet
 # TODO: fetch source and target wallets
