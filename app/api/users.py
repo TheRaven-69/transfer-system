@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.services.users import create_user, get_user_by_id, create_wallet_for_user
 
+
 from app.db.session import get_db
 
 

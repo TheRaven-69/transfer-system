@@ -1,4 +1,3 @@
-
 import os
 import sys
 
@@ -11,6 +10,9 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.db.session import get_db
+from app.db.models import Base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 
 def override_get_db():
@@ -23,3 +25,26 @@ def client():
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="session")
+def engine():
+    # SQLite in-memory (швидко)
+    return create_engine("sqlite+pysqlite:///:memory:", future=True)
+
+
+@pytest.fixture(scope="session")
+def tables(engine):
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture()
+def db(engine, tables):
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()

@@ -41,10 +41,10 @@ def test_post_wallets_auto_create_returns_wallet_and_user(client, monkeypatch):
 
 
 def test_get_wallet_by_id_returns_wallet(client, monkeypatch):
-    def fake_get_wallet_by_id(db, wallet_id: int):
+    def fake_get_wallet(db, wallet_id: int):
         return DummyWallet(id=wallet_id, user_id=99, balance="123.45")
 
-    monkeypatch.setattr(wallets_router, "get_wallet_by_id", fake_get_wallet_by_id)
+    monkeypatch.setattr(wallets_router, "get_wallet", fake_get_wallet)
 
     r = client.get("/wallets/5")
     assert r.status_code == 200
@@ -59,10 +59,10 @@ def test_get_wallet_not_found_returns_404(client, monkeypatch):
     # Якщо в майбутньому сервіс буде кидати HTTPException(404)
     from fastapi import HTTPException
 
-    def fake_get_wallet_by_id(db, wallet_id: int):
+    def fake_get_wallet(db, wallet_id: int):
         raise HTTPException(status_code=404, detail="Wallet not found")
 
-    monkeypatch.setattr(wallets_router, "get_wallet_by_id", fake_get_wallet_by_id)
+    monkeypatch.setattr(wallets_router, "get_wallet", fake_get_wallet)
 
     r = client.get("/wallets/999999")
     assert r.status_code == 404

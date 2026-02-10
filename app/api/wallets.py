@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.services.wallets import get_wallet_by_id, create_wallet_with_autouser
+from app.services.wallets import get_wallet, create_wallet_with_autouser
 
 from app.db.session import get_db
 
@@ -24,8 +24,8 @@ def auto_create(db: Session = Depends(get_db)):
     
 
 @router.get("/{wallet_id}")
-def get_wallet(wallet_id: int, db: Session = Depends(get_db)):
-    wallet = get_wallet_by_id(db, wallet_id)
+def get_wallet_(wallet_id: int, db: Session = Depends(get_db)):
+    wallet = get_wallet(db, wallet_id)
     
     return{
         "id": wallet.id,
