@@ -27,13 +27,13 @@ def client():
     app.dependency_overrides.clear()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture()
 def engine():
     # SQLite in-memory (швидко)
     return create_engine("sqlite+pysqlite:///:memory:", future=True)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture()
 def tables(engine):
     Base.metadata.create_all(bind=engine)
     yield
