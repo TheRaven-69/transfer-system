@@ -34,11 +34,11 @@ def test_post_transfers_creates_transfer(client, monkeypatch):
     assert data["created_at"] is not None
 
 
-def test_post_transfers_not_enough_money_returns_400(client, monkeypatch):
-    from fastapi import HTTPException
+def test_post_transfers_not_enough_money_returns_409(client, monkeypatch):
+    from app.services.exceptions import InsufficientFunds
 
     def fake_create_transfer(db, from_wallet_id: int, to_wallet_id: int, amount):
-        raise HTTPException(status_code=400, detail="Not enough funds")
+        raise InsufficientFunds()
 
     monkeypatch.setattr(transfers_router, "create_transfer", fake_create_transfer)
 
@@ -46,4 +46,5 @@ def test_post_transfers_not_enough_money_returns_400(client, monkeypatch):
         "/transfers",
         params={"from_wallet_id": 1, "to_wallet_id": 2, "amount": "9999"},
     )
-    assert r.status_code == 400
+    assert r.status_code == 409
+    assert r.json() == {"detail": "Insufficient funds"}

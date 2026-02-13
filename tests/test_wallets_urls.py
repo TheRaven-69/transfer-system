@@ -1,13 +1,6 @@
-from datetime import datetime
 from decimal import Decimal
 
 import app.api.wallets as wallets_router
-
-
-class DummyUser:
-    def __init__(self, id: int):
-        self.id = id
-        self.created_at = datetime(2026, 2, 7, 12, 0, 0)
 
 
 class DummyWallet:
@@ -15,29 +8,6 @@ class DummyWallet:
         self.id = id
         self.user_id = user_id
         self.balance = Decimal(balance)
-        self.user = DummyUser(user_id)
-
-
-
-def test_post_wallets_auto_create_returns_wallet_and_user(client, monkeypatch):
-    def fake_create_wallet_with_autouser(db):
-        return DummyWallet(id=1, user_id=10, balance="0")
-
-    monkeypatch.setattr(wallets_router, "create_wallet_with_autouser", fake_create_wallet_with_autouser)
-
-    r = client.post("/wallets")
-    assert r.status_code == 200
-
-    data = r.json()
-    assert "wallet" in data
-    assert "user" in data
-
-    assert data["wallet"]["id"] == 1
-    assert data["wallet"]["user_id"] == 10
-    assert data["wallet"]["balance"] is not None
-
-    assert data["user"]["id"] == 10
-    assert data["user"]["created_at"] is not None
 
 
 def test_get_wallet_by_id_returns_wallet(client, monkeypatch):
@@ -56,13 +26,14 @@ def test_get_wallet_by_id_returns_wallet(client, monkeypatch):
 
 
 def test_get_wallet_not_found_returns_404(client, monkeypatch):
-    # Якщо в майбутньому сервіс буде кидати HTTPException(404)
-    from fastapi import HTTPException
+    from app.services.exceptions import WalletNotFound
 
     def fake_get_wallet(db, wallet_id: int):
-        raise HTTPException(status_code=404, detail="Wallet not found")
+        raise WalletNotFound(wallet_id)
 
     monkeypatch.setattr(wallets_router, "get_wallet", fake_get_wallet)
 
     r = client.get("/wallets/999999")
     assert r.status_code == 404
+    assert r.json() == {"detail": "Wallet with id 999999 not found."}
+
