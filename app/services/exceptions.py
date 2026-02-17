@@ -1,6 +1,8 @@
 class ServiceError(Exception):
     """Base class for exceptions in this service."""
-    pass
+
+    def __str__(self) -> str:
+        return self.message
 
 
 class BadRequest(ServiceError):
@@ -10,7 +12,6 @@ class BadRequest(ServiceError):
 
 class NotFound(ServiceError):
     """Requested entity was not found."""
-    pass
 
 
 class Conflict(ServiceError):
@@ -26,9 +27,6 @@ class UserNotFound(NotFound):
     def message(self) -> str:
         return f"User with id {self.user_id} not found."
 
-    def __str__(self) -> str:
-        return self.message
-
 
 class WalletNotFound(NotFound):
     def __init__(self, wallet_id: int) -> None:
@@ -37,9 +35,6 @@ class WalletNotFound(NotFound):
     @property
     def message(self) -> str:
         return f"Wallet with id {self.wallet_id} not found."
-
-    def __str__(self) -> str:
-        return self.message
 
 
 class UserWalletNotFound(NotFound):
@@ -50,57 +45,22 @@ class UserWalletNotFound(NotFound):
     def message(self) -> str:
         return f"Wallet for user with id {self.user_id} not found."
 
-    def __str__(self) -> str:
-        return self.message
-
-
-class SourceWalletNotFound(NotFound):
-    def __init__(self, wallet_id: int) -> None:
-        self.wallet_id = wallet_id
-
-    @property
-    def message(self) -> str:
-        return f"From wallet with id {self.wallet_id} not found"
-
-    def __str__(self) -> str:
-        return self.message
-
-
-class DestinationWalletNotFound(NotFound):
-    def __init__(self, wallet_id: int) -> None:
-        self.wallet_id = wallet_id
-
-    @property
-    def message(self) -> str:
-        return f"To wallet with id {self.wallet_id} not found"
-
-    def __str__(self) -> str:
-        return self.message
-
 
 class CannotTransferToSameWallet(BadRequest):
     message = "Cannot transfer to the same wallet"
-
-    def __str__(self) -> str:
-        return self.message
 
 
 class TransferAmountRequired(BadRequest):
     message = "Amount is required"
 
-    def __str__(self) -> str:
-        return self.message
-
 
 class InvalidTransferAmount(BadRequest):
     message = "Amount must be greater than zero"
-
-    def __str__(self) -> str:
-        return self.message
 
 
 class InsufficientFunds(Conflict):
     message = "Insufficient funds"
 
-    def __str__(self) -> str:
-        return self.message
+
+class CacheUnavailable(ServiceError):
+    message = "Cache service is unavailable"
