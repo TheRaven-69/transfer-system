@@ -64,3 +64,6 @@ class InsufficientFunds(Conflict):
 
 class CacheUnavailable(ServiceError):
     message = "Cache service is unavailable"
+
+class IdempotencyKeyConflict(Conflict):
+    message = "Idempotency-Key reuse with different request data"

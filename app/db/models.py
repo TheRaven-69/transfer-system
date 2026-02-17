@@ -1,5 +1,5 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, relationship, mapped_column
-from sqlalchemy import Numeric, Integer, DateTime, ForeignKey, CheckConstraint, func
+from sqlalchemy import Numeric, Integer, DateTime, ForeignKey, CheckConstraint, func, String
 from datetime import datetime
 from decimal import Decimal
 
@@ -50,3 +50,5 @@ class Transaction(Base):
         foreign_keys=[to_wallet_id], 
         back_populates="incoming_transactions"
     )
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=True, unique=True)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=True)

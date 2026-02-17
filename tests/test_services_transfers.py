@@ -6,15 +6,13 @@ from app.services.transfers import create_transfer
 from app.services.exceptions import BadRequest, NotFound, Conflict
 
 def _mk_user_and_wallet(db, balance: Decimal) -> Wallet:
-    u = User()
-    db.add(u)
-    db.flush()
-    db.refresh(u)
-
-    w = Wallet(user_id=u.id, balance=balance)
-    db.add(w)
-    db.flush()
-    db.refresh(w)
+    with db.begin():
+        u = User()
+        db.add(u)
+        db.flush()
+        w = Wallet(user_id=u.id, balance=balance)
+        db.add(w)
+        db.commit()
     return w
 
 def test_transfer_success(db):

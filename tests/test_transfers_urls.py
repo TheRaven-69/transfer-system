@@ -14,7 +14,7 @@ class DummyTransfer:
 
 
 def test_post_transfers_creates_transfer(client, monkeypatch):
-    def fake_create_transfer(db, from_wallet_id: int, to_wallet_id: int, amount):
+    def fake_create_transfer(db, from_wallet_id: int, to_wallet_id: int, amount, idempotency_key: str):
         return DummyTransfer(id=1, from_wallet_id=from_wallet_id, to_wallet_id=to_wallet_id, amount=str(amount))
 
 
@@ -23,6 +23,7 @@ def test_post_transfers_creates_transfer(client, monkeypatch):
     r = client.post(
         "/transfers",
         params={"from_wallet_id": 1, "to_wallet_id": 2, "amount": "25.5"},
+        headers={"Idempotency-Key": "url-test-1"},
     )
     assert r.status_code == 200
 
@@ -37,7 +38,7 @@ def test_post_transfers_creates_transfer(client, monkeypatch):
 def test_post_transfers_not_enough_money_returns_409(client, monkeypatch):
     from app.services.exceptions import InsufficientFunds
 
-    def fake_create_transfer(db, from_wallet_id: int, to_wallet_id: int, amount):
+    def fake_create_transfer(db, from_wallet_id: int, to_wallet_id: int, amount, idempotency_key: str):
         raise InsufficientFunds()
 
     monkeypatch.setattr(transfers_router, "create_transfer", fake_create_transfer)
@@ -45,6 +46,7 @@ def test_post_transfers_not_enough_money_returns_409(client, monkeypatch):
     r = client.post(
         "/transfers",
         params={"from_wallet_id": 1, "to_wallet_id": 2, "amount": "9999"},
+        headers={"Idempotency-Key": "url-test-2"},
     )
     assert r.status_code == 409
     assert r.json() == {"detail": "Insufficient funds"}
