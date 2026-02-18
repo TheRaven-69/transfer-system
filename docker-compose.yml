@@ -22,7 +22,9 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_healthy  
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy    
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transfer_db
       REDIS_URL: redis://redis:6379/0
@@ -42,3 +44,33 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: transfer_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    container_name: transfer_worker
+    command: celery -A app.core.celery_app.celery_app worker --loglevel=info
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - NOTIFY_FAIL_RATE=0.7
+
+

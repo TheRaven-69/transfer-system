@@ -67,3 +67,7 @@ class CacheUnavailable(ServiceError):
 
 class IdempotencyKeyConflict(Conflict):
     message = "Idempotency-Key reuse with different request data"
+
+
+class RequestInProgress(Conflict):
+    message = "A request is already in progress"

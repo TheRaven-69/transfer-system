@@ -1,8 +1,11 @@
-from sqlalchemy import select, func
-from app.db.models import Transaction
+from decimal import Decimal
+
+from sqlalchemy import func, select
+
+from app.db.models import Transaction, Wallet
 
 
-def test_idempotency_same_key_returns_same_transaction(client, db, seeded_wallets):
+def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(client, db, seeded_wallets):
     w1, w2 = seeded_wallets
     headers = {"Idempotency-Key": "abc-123"}
 
@@ -27,6 +30,11 @@ def test_idempotency_same_key_returns_same_transaction(client, db, seeded_wallet
     count = db.execute(select(func.count(Transaction.id))).scalar_one()
     assert count == 1
 
+    from_wallet = db.get(Wallet, w1.id)
+    to_wallet = db.get(Wallet, w2.id)
+    assert from_wallet.balance == Decimal("990.00")
+    assert to_wallet.balance == Decimal("10.00")
+
 
 def test_idempotency_same_key_different_payload_conflict(client, seeded_wallets):
     w1, w2 = seeded_wallets
@@ -45,3 +53,14 @@ def test_idempotency_same_key_different_payload_conflict(client, seeded_wallets)
         headers=headers,
     )
     assert r2.status_code == 409
+
+
+def test_idempotency_key_is_required(client, seeded_wallets):
+    w1, w2 = seeded_wallets
+
+    response = client.post(
+        "/transfers",
+        params={"from_wallet_id": w1.id, "to_wallet_id": w2.id, "amount": "10.00"},
+    )
+
+    assert response.status_code == 422
