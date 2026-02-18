@@ -1,9 +1,13 @@
 import os
 import sys
+from types import SimpleNamespace
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+
+os.environ.setdefault("CELERY_BROKER_URL", "memory://")
+os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +18,14 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.db.session import get_db
 from app.db.models import Base, User, Wallet
+
+
+@pytest.fixture(autouse=True)
+def fake_notifications_task(monkeypatch):
+    import app.services.transfers as transfers_service
+
+    fake_task = SimpleNamespace(delay=lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(transfers_service, "send_transaction_notification", fake_task)
 
 
 @pytest.fixture()
