@@ -1,9 +1,7 @@
-import os
-from redis import Redis
 from typing import Optional
+from redis import Redis
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-CACHE_ENABLED = os.getenv("CACHE_ENABLED", "0") == "1"
+from config import CACHE_ENABLED, REDIS_URL
 
 _client: Optional[Redis] = None
 

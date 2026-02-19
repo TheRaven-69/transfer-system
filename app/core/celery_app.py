@@ -1,8 +1,5 @@
 from celery import Celery
-import os
-
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
+from config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND
 
 celery_app = Celery(
     "transfer_system",

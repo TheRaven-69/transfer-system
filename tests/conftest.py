@@ -1,6 +1,5 @@
 import os
 import sys
-from types import SimpleNamespace
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
@@ -8,6 +7,7 @@ if PROJECT_ROOT not in sys.path:
 
 os.environ.setdefault("CELERY_BROKER_URL", "memory://")
 os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
+os.environ.setdefault("NOTIFY_DELAY_SEC", "0")
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,16 +16,36 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.main import app
+from app.core.celery_app import celery_app
 from app.db.session import get_db
 from app.db.models import Base, User, Wallet
 
 
-@pytest.fixture(autouse=True)
-def fake_notifications_task(monkeypatch):
-    import app.services.transfers as transfers_service
+class FakeRedis:
+    def __init__(self):
+        self.data = {}
 
-    fake_task = SimpleNamespace(delay=lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(transfers_service, "send_transaction_notification", fake_task)
+    def get(self, key):
+        value = self.data.get(key)
+        if isinstance(value, str):
+            return value.encode("utf-8")
+        return value
+
+    def set(self, key, value, nx=False, ex=None):
+        if nx and key in self.data:
+            return False
+        self.data[key] = value
+        return True
+
+    def delete(self, key):
+        self.data.pop(key, None)
+        return 1
+
+
+celery_app.conf.update(
+    task_always_eager=True,
+    task_eager_propagates=True,
+)
 
 
 @pytest.fixture()
@@ -89,3 +109,8 @@ def seeded_wallets(db):
     db.refresh(w2)
 
     return w1, w2
+
+
+@pytest.fixture()
+def fake_redis():
+    return FakeRedis()
