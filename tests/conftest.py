@@ -1,5 +1,4 @@
 import os
-import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,10 +10,6 @@ from app.core.celery_app import celery_app
 from app.db.models import Base, User, Wallet
 from app.db.session import get_db
 from app.main import app
-
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
 
 os.environ.setdefault("CELERY_BROKER_URL", "memory://")
 os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")

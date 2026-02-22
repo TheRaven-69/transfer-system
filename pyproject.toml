@@ -70,3 +70,8 @@ docstring-code-format = true
 # Set the line length limit used when formatting code examples in
 # docstrings.
 docstring-code-line-length = "dynamic"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
