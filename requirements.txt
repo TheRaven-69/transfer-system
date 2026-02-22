@@ -26,5 +26,7 @@ tzdata==2025.3
 uvicorn==0.40.0
 redis==5.3.1
 celery==5.6.2
+ruff==0.9.7
+pre-commit==4.1.0
 
 
