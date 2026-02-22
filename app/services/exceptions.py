@@ -7,6 +7,7 @@ class ServiceError(Exception):
 
 class BadRequest(ServiceError):
     """Invalid inpud data."""
+
     pass
 
 
@@ -16,6 +17,7 @@ class NotFound(ServiceError):
 
 class Conflict(ServiceError):
     """Operation cannot be completed due to current state of the resource."""
+
     pass
 
 
@@ -64,6 +66,7 @@ class InsufficientFunds(Conflict):
 
 class CacheUnavailable(ServiceError):
     message = "Cache service is unavailable"
+
 
 class IdempotencyKeyConflict(Conflict):
     message = "Idempotency-Key reuse with different request data"

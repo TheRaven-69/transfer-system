@@ -4,7 +4,7 @@ import app.api.wallets as wallets_router
 
 
 class DummyWallet:
-    def __init__(self, id: int ,user_id: int, balance: str):
+    def __init__(self, id: int, user_id: int, balance: str):
         self.id = id
         self.user_id = user_id
         self.balance = Decimal(balance)

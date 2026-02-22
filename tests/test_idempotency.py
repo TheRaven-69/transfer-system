@@ -2,12 +2,19 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 
-from app.db.models import Transaction, Wallet
 import app.services.transfers as transfers_service
+from app.db.models import Transaction, Wallet
+from app.idempotency import IdempotencyManager
 
 
-def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(client, db, seeded_wallets, monkeypatch, fake_redis):
-    monkeypatch.setattr(transfers_service, "get_redis", lambda: fake_redis)
+def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(
+    client, db, seeded_wallets, monkeypatch, fake_redis
+):
+    monkeypatch.setattr(
+        transfers_service,
+        "get_idempotency_manager",
+        lambda: IdempotencyManager(fake_redis),
+    )
 
     w1, w2 = seeded_wallets
     headers = {"Idempotency-Key": "abc-123"}
@@ -18,7 +25,6 @@ def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(clien
         headers=headers,
     )
     assert r1.status_code == 200
-    tx1 = r1.json()
 
     r2 = client.post(
         "/transfers",
@@ -37,8 +43,14 @@ def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(clien
     assert to_wallet.balance == Decimal("10.00")
 
 
-def test_idempotency_same_key_different_payload_conflict(client, seeded_wallets, monkeypatch, fake_redis):
-    monkeypatch.setattr(transfers_service, "get_redis", lambda: fake_redis)
+def test_idempotency_same_key_different_payload_conflict(
+    client, seeded_wallets, monkeypatch, fake_redis
+):
+    monkeypatch.setattr(
+        transfers_service,
+        "get_idempotency_manager",
+        lambda: IdempotencyManager(fake_redis),
+    )
 
     w1, w2 = seeded_wallets
     headers = {"Idempotency-Key": "abc-999"}

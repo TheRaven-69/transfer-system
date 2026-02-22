@@ -1,7 +1,8 @@
 from fastapi import APIRouter
+
 from .transfers import router as transfers_router
-from .wallets import router as wallet_router
 from .users import router as users_router
+from .wallets import router as wallet_router
 
 router = APIRouter()
 
