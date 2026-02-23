@@ -1,13 +1,4 @@
 import os
-import sys
-
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-
-os.environ.setdefault("CELERY_BROKER_URL", "memory://")
-os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
-os.environ.setdefault("NOTIFY_DELAY_SEC", "0")
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,10 +6,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.main import app
 from app.core.celery_app import celery_app
-from app.db.session import get_db
 from app.db.models import Base, User, Wallet
+from app.db.session import get_db
+from app.main import app
+
+os.environ.setdefault("CELERY_BROKER_URL", "memory://")
+os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
+os.environ.setdefault("NOTIFY_DELAY_SEC", "0")
 
 
 class FakeRedis:
@@ -67,14 +62,14 @@ def tables(engine):
 
 @pytest.fixture()
 def db(engine, tables):
-    SessionLocal = sessionmaker(
+    session_local = sessionmaker(
         bind=engine,
         autoflush=False,
         autocommit=False,
         expire_on_commit=False,
         future=True,
     )
-    session = SessionLocal()
+    session = session_local()
     try:
         yield session
     finally:
@@ -105,8 +100,6 @@ def seeded_wallets(db):
     w2 = Wallet(user_id=u2.id, balance=0)
     db.add_all([w1, w2])
     db.commit()
-    db.refresh(w1)
-    db.refresh(w2)
 
     return w1, w2
 

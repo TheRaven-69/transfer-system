@@ -1,22 +1,18 @@
-import hashlib
-from contextlib import nullcontext
 from decimal import Decimal
 
-from redis import RedisError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.cache import get_redis
 from app.db.models import Transaction, Wallet
+from app.db.tx import on_commit, transaction_scope
+from app.idempotency import get_idempotency_manager, hash_payload
 from app.services.wallets import invalidate_wallet_cache
 from app.tasks.notifications import send_transaction_notification
 
 from .exceptions import (
     CannotTransferToSameWallet,
-    IdempotencyKeyConflict,
     InsufficientFunds,
     InvalidTransferAmount,
-    RequestInProgress,
     TransferAmountRequired,
     WalletNotFound,
 )
@@ -24,7 +20,9 @@ from .exceptions import (
 IDEM_RESULT_TTL_SEC = 24 * 3600
 
 
-def create_transfer(db: Session, from_wallet_id: int, to_wallet_id: int, amount: Decimal) -> Transaction:
+def create_transfer(
+    db: Session, from_wallet_id: int, to_wallet_id: int, amount: Decimal
+) -> Transaction:
     if from_wallet_id == to_wallet_id:
         raise CannotTransferToSameWallet()
     if amount is None:
@@ -34,8 +32,7 @@ def create_transfer(db: Session, from_wallet_id: int, to_wallet_id: int, amount:
 
     first_id, second_id = sorted([from_wallet_id, to_wallet_id])
 
-    tx_context = nullcontext() if db.in_transaction() else db.begin()
-    with tx_context:
+    with transaction_scope(db):
         wallets = (
             db.execute(
                 select(Wallet)
@@ -67,22 +64,12 @@ def create_transfer(db: Session, from_wallet_id: int, to_wallet_id: int, amount:
             amount=amount,
         )
         db.add(transfer)
-        db.flush()
-        db.refresh(transfer)
 
-    invalidate_wallet_cache(from_wallet_id)
-    invalidate_wallet_cache(to_wallet_id)
+        on_commit(db, invalidate_wallet_cache, from_wallet_id)
+        on_commit(db, invalidate_wallet_cache, to_wallet_id)
+        on_commit(db, send_transaction_notification.delay, transfer.id)
 
     return transfer
-
-
-def _hash_transfer_request(from_wallet_id: int, to_wallet_id: int, amount: Decimal) -> str:
-    payload = f"{from_wallet_id}:{to_wallet_id}:{str(amount)}"
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _idempotency_redis_key(idempotency_key: str) -> str:
-    return f"idem:transfer:{idempotency_key}"
 
 
 def create_transfer_idempotent(
@@ -92,34 +79,15 @@ def create_transfer_idempotent(
     amount: Decimal,
     idempotency_key: str,
 ) -> Transaction:
-    redis_client = get_redis()
-    if redis_client is None:
-        raise RequestInProgress()
+    idem = get_idempotency_manager()
 
-    request_hash = _hash_transfer_request(from_wallet_id, to_wallet_id, amount)
-    key = _idempotency_redis_key(idempotency_key)
+    payload = {
+        "from_wallet_id": from_wallet_id,
+        "to_wallet_id": to_wallet_id,
+        "amount": str(amount),
+    }
+    request_hash = hash_payload(payload)
 
-    try:
-        key_created = redis_client.set(
-            key,
-            request_hash,
-            ex=IDEM_RESULT_TTL_SEC,
-            nx=True, # Only set if not exists
-        )
-        if not key_created:
-            existing_hash = redis_client.get(key)
-            if existing_hash and existing_hash.decode("utf-8") != request_hash:
-                raise IdempotencyKeyConflict()
-            raise RequestInProgress()
-
-        try:
-            tx = create_transfer(db, from_wallet_id, to_wallet_id, amount)
-        except Exception:
-            redis_client.delete(key)
-            raise
-
-    except RedisError:
-        raise RequestInProgress()
-
-    send_transaction_notification.delay(tx.id)
-    return tx
+    # Use context manager for reservation and automatic cleanup on failure
+    with idem.reserve(f"transfer:{idempotency_key}", request_hash):
+        return create_transfer(db, from_wallet_id, to_wallet_id, amount)

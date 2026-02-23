@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
-import app.api.users as users_router  
+
+import app.api.users as users_router
 
 
 class DummyUser:
@@ -20,8 +21,9 @@ class DummyWallet:
 
 def test_post_users_creates_user_and_wallet(client, monkeypatch):
     def fake_create_user(db, *args, **kwargs):
-        return DummyUser(id=1, wallet=DummyWallet(id=11, user_id=1, balance="100.00"), name="John")
-
+        return DummyUser(
+            id=1, wallet=DummyWallet(id=11, user_id=1, balance="100.00"), name="John"
+        )
 
     monkeypatch.setattr(users_router, "create_user", fake_create_user)
 
@@ -37,7 +39,11 @@ def test_post_users_creates_user_and_wallet(client, monkeypatch):
 
 def test_get_user_returns_user(client, monkeypatch):
     def fake_get_user_by_id(db, user_id: int):
-        return DummyUser(id=user_id, wallet=DummyWallet(id=77, user_id=user_id, balance="50.00"), name="Alice")
+        return DummyUser(
+            id=user_id,
+            wallet=DummyWallet(id=77, user_id=user_id, balance="50.00"),
+            name="Alice",
+        )
 
     monkeypatch.setattr(users_router, "get_user_by_id", fake_get_user_by_id)
 

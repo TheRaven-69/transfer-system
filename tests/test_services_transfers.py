@@ -3,7 +3,9 @@ from decimal import Decimal
 import pytest
 from redis import RedisError
 
+import app.services.transfers as transfers_service
 from app.db.models import Transaction, User, Wallet
+from app.idempotency import IdempotencyManager, hash_payload
 from app.services.exceptions import (
     BadRequest,
     Conflict,
@@ -11,8 +13,7 @@ from app.services.exceptions import (
     NotFound,
     RequestInProgress,
 )
-from app.services.transfers import create_transfer, create_transfer_idempotent, _hash_transfer_request
-import app.services.transfers as transfers_service
+from app.services.transfers import create_transfer, create_transfer_idempotent
 
 
 def _mk_user_and_wallet(db, balance: Decimal) -> Wallet:
@@ -24,7 +25,6 @@ def _mk_user_and_wallet(db, balance: Decimal) -> Wallet:
     wallet = Wallet(user_id=user.id, balance=balance)
     db.add(wallet)
     db.commit()
-    db.refresh(wallet)
     return wallet
 
 
@@ -103,13 +103,21 @@ def test_transfer_insufficient_funds_conflict_and_atomic(db):
     assert db.query(Transaction).count() == 0
 
 
-def test_idempotent_transfer_redis_same_key_raises_in_progress_without_double_debit(monkeypatch, db, fake_redis):
-    monkeypatch.setattr(transfers_service, "get_redis", lambda: fake_redis)
+def test_idempotent_transfer_redis_same_key_raises_in_progress_without_double_debit(
+    monkeypatch, db, fake_redis
+):
+    monkeypatch.setattr(
+        transfers_service,
+        "get_idempotency_manager",
+        lambda: IdempotencyManager(fake_redis),
+    )
 
     from_w = _mk_user_and_wallet(db, Decimal("100.00"))
     to_w = _mk_user_and_wallet(db, Decimal("0.00"))
 
-    tx1 = create_transfer_idempotent(db, from_w.id, to_w.id, Decimal("10.00"), "redis-1")
+    tx1 = create_transfer_idempotent(
+        db, from_w.id, to_w.id, Decimal("10.00"), "redis-1"
+    )
     with pytest.raises(RequestInProgress):
         create_transfer_idempotent(db, from_w.id, to_w.id, Decimal("10.00"), "redis-1")
 
@@ -122,7 +130,11 @@ def test_idempotent_transfer_redis_same_key_raises_in_progress_without_double_de
 
 
 def test_idempotent_transfer_redis_writes_request_hash(monkeypatch, db, fake_redis):
-    monkeypatch.setattr(transfers_service, "get_redis", lambda: fake_redis)
+    monkeypatch.setattr(
+        transfers_service,
+        "get_idempotency_manager",
+        lambda: IdempotencyManager(fake_redis),
+    )
 
     from_w = _mk_user_and_wallet(db, Decimal("100.00"))
     to_w = _mk_user_and_wallet(db, Decimal("0.00"))
@@ -131,11 +143,17 @@ def test_idempotent_transfer_redis_writes_request_hash(monkeypatch, db, fake_red
 
     raw = fake_redis.get("idem:transfer:redis-done")
     assert raw is not None
-    assert raw.decode("utf-8") == _hash_transfer_request(from_w.id, to_w.id, Decimal("10.00"))
+
+    payload = {"from_wallet_id": from_w.id, "to_wallet_id": to_w.id, "amount": "10.00"}
+    assert raw.decode("utf-8") == hash_payload(payload)
 
 
 def test_idempotent_transfer_redis_conflict_by_payload(monkeypatch, db, fake_redis):
-    monkeypatch.setattr(transfers_service, "get_redis", lambda: fake_redis)
+    monkeypatch.setattr(
+        transfers_service,
+        "get_idempotency_manager",
+        lambda: IdempotencyManager(fake_redis),
+    )
 
     from_w = _mk_user_and_wallet(db, Decimal("100.00"))
     to_w = _mk_user_and_wallet(db, Decimal("0.00"))
@@ -146,8 +164,14 @@ def test_idempotent_transfer_redis_conflict_by_payload(monkeypatch, db, fake_red
         create_transfer_idempotent(db, from_w.id, to_w.id, Decimal("20.00"), "redis-2")
 
 
-def test_idempotent_transfer_existing_same_hash_raises_in_progress(monkeypatch, db, fake_redis):
-    monkeypatch.setattr(transfers_service, "get_redis", lambda: fake_redis)
+def test_idempotent_transfer_existing_same_hash_raises_in_progress(
+    monkeypatch, db, fake_redis
+):
+    monkeypatch.setattr(
+        transfers_service,
+        "get_idempotency_manager",
+        lambda: IdempotencyManager(fake_redis),
+    )
 
     from_w = _mk_user_and_wallet(db, Decimal("100.00"))
     to_w = _mk_user_and_wallet(db, Decimal("0.00"))
@@ -158,17 +182,21 @@ def test_idempotent_transfer_existing_same_hash_raises_in_progress(monkeypatch, 
     )
 
     monkeypatch.setattr(
-        transfers_service,
-        "_hash_transfer_request",
+        "app.services.transfers.hash_payload",
         lambda *_args, **_kwargs: "same-hash",
     )
 
     with pytest.raises(RequestInProgress):
-        create_transfer_idempotent(db, from_w.id, to_w.id, Decimal("5.00"), "redis-processing")
+        create_transfer_idempotent(
+            db, from_w.id, to_w.id, Decimal("5.00"), "redis-processing"
+        )
 
 
 def test_idempotent_transfer_without_redis_raises_in_progress(monkeypatch, db):
-    monkeypatch.setattr(transfers_service, "get_redis", lambda: None)
+    # Null Object pattern case
+    monkeypatch.setattr(
+        transfers_service, "get_idempotency_manager", lambda: IdempotencyManager(None)
+    )
 
     from_w = _mk_user_and_wallet(db, Decimal("100.00"))
     to_w = _mk_user_and_wallet(db, Decimal("0.00"))
@@ -179,20 +207,38 @@ def test_idempotent_transfer_without_redis_raises_in_progress(monkeypatch, db):
 
 def test_idempotent_transfer_redis_error_raises_in_progress(monkeypatch, db):
     class FailingRedis:
-        def set(self, key, value, nx=False, ex=None):
-            raise RedisError("redis is down")
+        def get(self, *args, **kwargs):
+            raise RedisError("error")
 
-    monkeypatch.setattr(transfers_service, "get_redis", lambda: FailingRedis())
+        def set(self, *args, **kwargs):
+            raise RedisError("error")
+
+        def delete(self, *args, **kwargs):
+            raise RedisError("error")
+
+    monkeypatch.setattr(
+        transfers_service,
+        "get_idempotency_manager",
+        lambda: IdempotencyManager(FailingRedis()),
+    )
 
     from_w = _mk_user_and_wallet(db, Decimal("100.00"))
     to_w = _mk_user_and_wallet(db, Decimal("0.00"))
 
     with pytest.raises(RequestInProgress):
-        create_transfer_idempotent(db, from_w.id, to_w.id, Decimal("5.00"), "redis-fail-1")
+        create_transfer_idempotent(
+            db, from_w.id, to_w.id, Decimal("5.00"), "redis-fail-1"
+        )
 
 
-def test_idempotent_transfer_error_cleanup_deletes_processing_key(monkeypatch, db, fake_redis):
-    monkeypatch.setattr(transfers_service, "get_redis", lambda: fake_redis)
+def test_idempotent_transfer_error_cleanup_deletes_processing_key(
+    monkeypatch, db, fake_redis
+):
+    monkeypatch.setattr(
+        transfers_service,
+        "get_idempotency_manager",
+        lambda: IdempotencyManager(fake_redis),
+    )
 
     from_w = _mk_user_and_wallet(db, Decimal("100.00"))
     to_w = _mk_user_and_wallet(db, Decimal("0.00"))

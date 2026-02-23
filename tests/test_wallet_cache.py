@@ -1,12 +1,13 @@
 import json
-import pytest
 
-from app.services.exceptions import CacheUnavailable
 import redis
+
+from app.cache import Cache
 
 
 class DummyRedis:
     """Простий fake Redis для тестів."""
+
     def __init__(self, initial=None, fail_get=False, fail_set=False, fail_delete=False):
         self.store = dict(initial or {})
         self.fail_get = fail_get
@@ -22,10 +23,12 @@ class DummyRedis:
             raise redis.RedisError("redis get failed")
         return self.store.get(key)
 
-    def set(self, key, value, ex=None):
+    def set(self, key, value, ex=None, nx=False):
         self.set_calls.append((key, value, ex))
         if self.fail_set:
             raise redis.RedisError("redis set failed")
+        if nx and key in self.store:
+            return False
         self.store[key] = value
         return True
 
@@ -39,6 +42,7 @@ class DummyRedis:
 
 class DummyDB:
     """Fake DB, який дозволяє порахувати скільки разів його викликали."""
+
     def __init__(self, wallet_obj=None, fail=False):
         self.wallet_obj = wallet_obj
         self.fail = fail
@@ -65,9 +69,9 @@ def test_cache_hit_returns_cached_and_skips_db(monkeypatch):
     from app.services import wallets as wallets_service
 
     cached = {"id": 1, "balance": "55.00", "user_id": 7}
-    r = DummyRedis(initial={ "wallet:1": json.dumps(cached) })
+    r = DummyRedis(initial={"wallet:1": json.dumps(cached)})
 
-    monkeypatch.setattr(wallets_service, "get_redis", lambda: r)
+    monkeypatch.setattr(wallets_service, "get_cache", lambda: Cache(r))
 
     db = DummyDB(fail=True)  # якщо звернемось до БД — тест впаде
 
@@ -85,7 +89,7 @@ def test_cache_miss_fetches_db_and_sets_cache(monkeypatch):
     from app.services import wallets as wallets_service
 
     r = DummyRedis(initial={})  # пустий кеш
-    monkeypatch.setattr(wallets_service, "get_redis", lambda: r)
+    monkeypatch.setattr(wallets_service, "get_cache", lambda: Cache(r))
 
     wallet = DummyWallet(wallet_id=2, balance="100.00", user_id=10)
     db = DummyDB(wallet_obj=wallet)
@@ -107,14 +111,12 @@ def test_cache_miss_fetches_db_and_sets_cache(monkeypatch):
 
 def test_redis_unavailable_falls_back_to_db(monkeypatch):
     """
-    get_redis() кидає CacheUnavailable -> сервіс не падає, йде в БД.
+    Cache повернув Null Object -> сервіс не падає, йде в БД.
     """
     from app.services import wallets as wallets_service
 
-    def raise_cache_unavailable():
-        raise CacheUnavailable("redis down")
-
-    monkeypatch.setattr(wallets_service, "get_redis", raise_cache_unavailable)
+    # Null Object (no redis client)
+    monkeypatch.setattr(wallets_service, "get_cache", lambda: Cache(None))
 
     wallet = DummyWallet(wallet_id=3, balance="77.00", user_id=11)
     db = DummyDB(wallet_obj=wallet)
@@ -127,12 +129,12 @@ def test_redis_unavailable_falls_back_to_db(monkeypatch):
 
 def test_redis_get_error_falls_back_to_db(monkeypatch):
     """
-    Redis є, але GET падає -> сервіс не падає, йде в БД.
+    Redis є, але GET падає -> сервіс не падає (Cache обгортка ловить error), йде в БД.
     """
     from app.services import wallets as wallets_service
 
     r = DummyRedis(fail_get=True)
-    monkeypatch.setattr(wallets_service, "get_redis", lambda: r)
+    monkeypatch.setattr(wallets_service, "get_cache", lambda: Cache(r))
 
     wallet = DummyWallet(wallet_id=4, balance="12.00", user_id=99)
     db = DummyDB(wallet_obj=wallet)
@@ -150,7 +152,7 @@ def test_redis_set_error_still_returns_db_data(monkeypatch):
     from app.services import wallets as wallets_service
 
     r = DummyRedis(fail_set=True)
-    monkeypatch.setattr(wallets_service, "get_redis", lambda: r)
+    monkeypatch.setattr(wallets_service, "get_cache", lambda: Cache(r))
 
     wallet = DummyWallet(wallet_id=5, balance="999.99", user_id=1)
     db = DummyDB(wallet_obj=wallet)
@@ -167,7 +169,7 @@ def test_invalidate_cache_no_redis_no_crash(monkeypatch):
     """
     from app.services import wallets as wallets_service
 
-    monkeypatch.setattr(wallets_service, "get_redis", lambda: None)
+    monkeypatch.setattr(wallets_service, "get_cache", lambda: Cache(None))
 
     wallets_service.invalidate_wallet_cache(1)
 
@@ -179,7 +181,7 @@ def test_invalidate_cache_redis_delete_error_no_crash(monkeypatch):
     from app.services import wallets as wallets_service
 
     r = DummyRedis(fail_delete=True)
-    monkeypatch.setattr(wallets_service, "get_redis", lambda: r)
+    monkeypatch.setattr(wallets_service, "get_cache", lambda: Cache(r))
 
     wallets_service.invalidate_wallet_cache(1)
     assert r.delete_calls == ["wallet:1"]
