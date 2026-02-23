@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
 from app.db.models import Base
@@ -46,9 +47,10 @@ Base.metadata.create_all(bind=engine)
 app.include_router(router)
 
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def root():
-    return {"status": "ok"}
+    with open("static/index.html", "r") as f:
+        return f.read()
 
 
 @app.get("/health")
