@@ -1,0 +1,96 @@
+services:
+  db:
+    image: postgres:15
+    container_name: transfer_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: transfer_db
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+    command: > 
+      postgres -c statement_timeout=50000  
+
+  app:
+    build: .
+    container_name: transfer_app
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy    
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transfer_db?connect_timeout=5
+      REDIS_URL: redis://redis:6379/0
+      CACHE_ENABLED: "1"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()\""
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+    expose:
+      - "8000"
+
+
+  redis:
+    image: redis:7-alpine
+    container_name: transfer_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: transfer_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    container_name: transfer_worker
+    command: celery -A app.core.celery_app.celery_app worker --loglevel=info
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - NOTIFY_FAIL_RATE=0.7
+
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      app:
+        condition: service_healthy
