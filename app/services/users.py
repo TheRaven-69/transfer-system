@@ -1,18 +1,19 @@
 from sqlalchemy.orm import Session
 
-from app.db.models import User, Wallet
+from app.db.models import User
+from app.db.tx import transaction_scope
+
 from .exceptions import UserNotFound, UserWalletNotFound
 from .wallets import create_wallet_for_user
 
 
 def create_user(db: Session) -> User:
-    with db.begin():
+    with transaction_scope(db):
         user = User()
         db.add(user)
         db.flush()
         wallet = create_wallet_for_user(db, user.id)
         user.wallet = wallet
-    db.refresh(user)
     return user
 
 

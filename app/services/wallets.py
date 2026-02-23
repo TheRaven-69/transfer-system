@@ -1,13 +1,14 @@
-import json
 from decimal import Decimal
+
 from sqlalchemy.orm import Session
-from redis import RedisError
 
-from app.cache import get_redis
-from app.db.models import Wallet, User
-from .exceptions import WalletNotFound, UserNotFound, CacheUnavailable
+from app.cache import get_cache
+from app.db.models import User, Wallet
+from app.db.tx import on_commit
 
-CACHE_TTL_SECONDS = 60  # стартово, потім можна 300
+from .exceptions import UserNotFound, WalletNotFound
+
+CACHE_TTL_SECONDS = 60
 WALLET_CACHE_PREFIX = "wallet:"
 
 
@@ -19,45 +20,26 @@ def _get_wallet_from_db(db: Session, wallet_id: int) -> Wallet:
 
 
 def get_wallet_cached(db: Session, wallet_id: int) -> dict:
-    r = None
-    key = f"wallet:{wallet_id}"
-    try:
-        r = get_redis()
-    except CacheUnavailable:
-        r = None
+    cache = get_cache()
+    key = f"{WALLET_CACHE_PREFIX}{wallet_id}"
 
-    if r:
-        try:
-            cached = r.get(key)
-            if cached:
-                return json.loads(cached)
-        except RedisError:
-            pass        
+    data = cache.get(key)
+    if data:
+        return data
 
     wallet = _get_wallet_from_db(db, wallet_id)
-
     data = {
         "id": wallet.id,
         "balance": str(wallet.balance),
         "user_id": wallet.user_id,
     }
 
-    if r:
-        try:
-            r.set(key, json.dumps(data), ex=CACHE_TTL_SECONDS)
-        except RedisError:
-            pass  
-
+    cache.set(key, data, ex=CACHE_TTL_SECONDS)
     return data
 
 
 def invalidate_wallet_cache(wallet_id: int) -> None:
-    r = get_redis()
-    if r:
-        try:
-            r.delete(f"wallet:{wallet_id}")
-        except RedisError:
-            pass    
+    get_cache().delete(f"{WALLET_CACHE_PREFIX}{wallet_id}")
 
 
 def get_wallet(db: Session, wallet_id: int) -> Wallet:
@@ -72,9 +54,6 @@ def create_wallet_for_user(db: Session, user_id: int) -> Wallet:
 
     wallet = Wallet(user_id=user.id, balance=initial_balance)
     db.add(wallet)
-    db.flush()
-    db.refresh(wallet)
 
-    invalidate_wallet_cache(wallet.id)
-
+    on_commit(db, invalidate_wallet_cache, wallet.id)
     return wallet

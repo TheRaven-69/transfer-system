@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-import app.api.transfers as transfers_router  
+import app.api.transfers as transfers_router
 
 
 class DummyTransfer:
@@ -14,9 +14,15 @@ class DummyTransfer:
 
 
 def test_post_transfers_creates_transfer(client, monkeypatch):
-    def fake_create_transfer(db, from_wallet_id: int, to_wallet_id: int, amount, idempotency_key: str):
-        return DummyTransfer(id=1, from_wallet_id=from_wallet_id, to_wallet_id=to_wallet_id, amount=str(amount))
-
+    def fake_create_transfer(
+        db, from_wallet_id: int, to_wallet_id: int, amount, idempotency_key: str
+    ):
+        return DummyTransfer(
+            id=1,
+            from_wallet_id=from_wallet_id,
+            to_wallet_id=to_wallet_id,
+            amount=str(amount),
+        )
 
     monkeypatch.setattr(transfers_router, "create_transfer", fake_create_transfer)
 
@@ -38,7 +44,9 @@ def test_post_transfers_creates_transfer(client, monkeypatch):
 def test_post_transfers_not_enough_money_returns_409(client, monkeypatch):
     from app.services.exceptions import InsufficientFunds
 
-    def fake_create_transfer(db, from_wallet_id: int, to_wallet_id: int, amount, idempotency_key: str):
+    def fake_create_transfer(
+        db, from_wallet_id: int, to_wallet_id: int, amount, idempotency_key: str
+    ):
         raise InsufficientFunds()
 
     monkeypatch.setattr(transfers_router, "create_transfer", fake_create_transfer)

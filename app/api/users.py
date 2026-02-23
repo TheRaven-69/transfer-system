@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.services.users import (
-    create_user_with_wallet as create_user,
-    get_user_by_id_with_wallet as get_user_by_id,
-)
-
 
 from app.db.session import get_db
-
+from app.services.users import (
+    create_user_with_wallet as create_user,
+)
+from app.services.users import (
+    get_user_by_id_with_wallet as get_user_by_id,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
