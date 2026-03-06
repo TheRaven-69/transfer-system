@@ -1,11 +1,11 @@
 from celery import Celery
 
-from config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND
+from app.core.settings import settings
 
 celery_app = Celery(
     "transfer_system",
-    broker=CELERY_BROKER_URL,
-    backend=CELERY_RESULT_BACKEND,
+    broker=settings.RABBITMQ_URL,
+    backend=settings.REDIS_URL,
     include=["app.tasks.notifications"],
 )
 
