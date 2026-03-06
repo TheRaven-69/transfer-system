@@ -28,8 +28,10 @@ services:
       rabbitmq:
         condition: service_healthy    
     environment:
+      APP_ENV: prod
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transfer_db?connect_timeout=5
       REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
       CACHE_ENABLED: "1"
     healthcheck:
       test:
@@ -80,9 +82,13 @@ services:
       db:
         condition: service_healthy
     environment:
-      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - NOTIFY_FAIL_RATE=0.7
+      APP_ENV: prod
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transfer_db?connect_timeout=5
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      CACHE_ENABLED: "1"
+      NOTIFY_FAIL_RATE: "0.7"
+      NOTIFY_DELAY_SEC: "2.0"
 
 
   nginx:
