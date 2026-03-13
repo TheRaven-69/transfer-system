@@ -1,7 +1,12 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.api.routes import router
+from app.core.logging import setup_logging
+from app.core.middlaware import RequestIDMiddleware
 from app.db.models import Base
 from app.db.session import engine
 from app.services.exceptions import (
@@ -11,13 +16,40 @@ from app.services.exceptions import (
     NotFound,
 )
 
-app = FastAPI(title="Transfer System API")
+setup_logging()
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Application startup")
+    yield
+    logger.info("Application shutdown")
+
+
+app = FastAPI(title="Transfer System API", lifespan=lifespan)
+app.add_middleware(RequestIDMiddleware)
+
+logger.info("Application module loaded")
 
 
 def _error_response(status_code: int, exc: Exception) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={"detail": str(exc)},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(
+        "Unhandled exception occurred: path=%s method=%s",
+        request.url.path,
+        request.method,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
     )
 
 
@@ -54,4 +86,5 @@ def root():
 
 @app.get("/health")
 def health():
+    logger.info("Health endpoint called")
     return {"status": "ok"}

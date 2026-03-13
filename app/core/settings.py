@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     RABBITMQ_URL: str | None = None
 
     CACHE_ENABLED: bool = Field(default=False)
+    LOG_LEVEL: str = Field(default="INFO")
 
     NOTIFY_FAIL_RATE: float = Field(default=0.0, ge=0.0, le=1.0)
     NOTIFY_DELAY_SEC: float = Field(default=2.0, ge=0.0)
