@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -11,10 +13,14 @@ from app.services.users import (
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+logger = logging.getLogger(__name__)
+
 
 @router.post("")
 def post_user(db: Session = Depends(get_db)):
+    logger.info("Create user endpoint called")
     created_user = create_user(db)
+    logger.info("User created successfully: user_id=%s", created_user.id)
     return {
         "id": created_user.id,
         "created_at": created_user.created_at,
@@ -26,7 +32,9 @@ def post_user(db: Session = Depends(get_db)):
 
 @router.get("/{user_id}")
 def get_user(user_id: int, db: Session = Depends(get_db)):
+    logger.info("Get user endpoint called: user_id=%s", user_id)
     user_inform = get_user_by_id(db, user_id)
+    logger.info("User returned successfully: user_id=%s", user_id)
     return {
         "id": user_inform.id,
         "created_at": user_inform.created_at,
