@@ -28,7 +28,6 @@ services:
       rabbitmq:
         condition: service_healthy    
     environment:
-      APP_ENV: prod
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transfer_db?connect_timeout=5
       REDIS_URL: redis://redis:6379/0
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
@@ -82,7 +81,6 @@ services:
       db:
         condition: service_healthy
     environment:
-      APP_ENV: prod
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transfer_db?connect_timeout=5
       REDIS_URL: redis://redis:6379/0
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//

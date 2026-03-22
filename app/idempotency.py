@@ -6,8 +6,8 @@ from typing import Optional
 
 from redis import Redis, RedisError
 
+from app.core.settings import settings
 from app.services.exceptions import IdempotencyKeyConflict, RequestInProgress
-from config import CACHE_ENABLED, REDIS_URL
 
 
 class IdempotencyManager:
@@ -74,12 +74,12 @@ class IdempotencyManager:
 
 @lru_cache(maxsize=1)
 def get_idempotency_manager() -> IdempotencyManager:
-    if not CACHE_ENABLED:
+    if not settings.CACHE_ENABLED:
         return IdempotencyManager(None)
     try:
         # We use a separate connection or the same URL,
         # but encapsulated in its own manager
-        client = Redis.from_url(REDIS_URL, decode_responses=True)
+        client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
         return IdempotencyManager(client)
     except Exception:
         return IdempotencyManager(None)

@@ -1,7 +1,5 @@
 import os
 
-# 👇 спочатку env
-os.environ.setdefault("APP_ENV", "dev")
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("RABBITMQ_URL", "memory://")
