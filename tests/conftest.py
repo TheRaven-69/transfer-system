@@ -1,9 +1,6 @@
 import os
 
-os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("RABBITMQ_URL", "memory://")
-os.environ.setdefault("NOTIFY_DELAY_SEC", "0")
+os.environ.setdefault("ENV_FILE", ".env.test")
 
 import pytest
 from fastapi.testclient import TestClient
