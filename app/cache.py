@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from redis import Redis, RedisError
 
-from config import CACHE_ENABLED, REDIS_URL
+from app.core.settings import settings
 
 
 class Cache:
@@ -62,11 +62,11 @@ class Cache:
 
 @lru_cache(maxsize=1)
 def get_cache() -> Cache:
-    if not CACHE_ENABLED:
+    if not settings.CACHE_ENABLED:
         return Cache(None)
 
     try:
-        client = Redis.from_url(REDIS_URL, decode_responses=True)
+        client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
         return Cache(client)
     except Exception:
         # Fallback to Null Object if connection fails during init
