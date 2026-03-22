@@ -3,88 +3,102 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Transfer System API</title>
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: #0f172a;
-            color: #e2e8f0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-
-        .container {
-            text-align: center;
-            max-width: 600px;
-        }
-
-        h1 {
-            font-size: 32px;
-            margin-bottom: 10px;
-        }
-
-        p {
-            color: #94a3b8;
-            margin-bottom: 20px;
-        }
-
-        .features {
-            text-align: left;
-            margin: 20px 0;
-        }
-
-        .features li {
-            margin-bottom: 8px;
-        }
-
-        .btn {
-            display: inline-block;
-            padding: 10px 20px;
-            margin: 10px;
-            background: #2563eb;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            transition: 0.2s;
-        }
-
-        .btn:hover {
-            background: #1d4ed8;
-        }
-
-        .secondary {
-            background: #334155;
-        }
-
-        .secondary:hover {
-            background: #475569;
-        }
-    </style>
+    <title>Transfer System Frontend</title>
+    <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-    <div class="container">
-        <h1>💳 Transfer System API</h1>
-        <p>
-            Production-oriented backend service for atomic wallet transfers.
-            Built with FastAPI, PostgreSQL, Redis, Celery & Docker.
-        </p>
+    <main class="page">
+        <header class="topbar">
+            <a href="/" class="brand">Transfer System</a>
+            <nav class="nav-links">
+                <a href="/ui/users" class="button button-secondary">Users</a>
+                <a href="/ui/wallets" class="button button-secondary">Wallets</a>
+                <a href="/ui/transfers" class="button button-secondary">Transfers</a>
+                <a href="/docs" class="button button-primary">Swagger</a>
+            </nav>
+        </header>
 
-        <ul class="features">
-            <li>✔ Atomic wallet-to-wallet transfers</li>
-            <li>✔ Redis balance caching</li>
-            <li>✔ Idempotency key support</li>
-            <li>✔ Async notifications (Celery + RabbitMQ)</li>
-            <li>✔ Dockerized infrastructure</li>
-        </ul>
+        <section class="hero">
+            <article class="hero-card">
+                <span class="eyebrow">Frontend split by area</span>
+                <h1>Choose the part of the product you want to work with</h1>
+                <p>
+                    Instead of one overloaded page, the UI is now separated into focused screens for
+                    users, wallets and transfers. That makes the frontend easier to grow and much less
+                    noisy during demos.
+                </p>
 
-        <a href="/docs" class="btn">Open API Docs</a>
-        <a href="https://github.com/TheRaven-69/transfer-system" 
-           class="btn secondary" target="_blank">
-           GitHub Repository
-        </a>
-    </div>
+                <div class="hero-actions">
+                    <a href="/ui/users" class="button button-primary">Open users page</a>
+                    <a href="/ui/transfers" class="button button-secondary">Open transfers page</a>
+                </div>
+
+                <div class="highlights">
+                    <article class="highlight">
+                        <strong>Users</strong>
+                        <span>Create a user and inspect the linked wallet from a dedicated screen.</span>
+                    </article>
+                    <article class="highlight">
+                        <strong>Wallets</strong>
+                        <span>Read wallet balances without sharing space with unrelated transfer forms.</span>
+                    </article>
+                    <article class="highlight">
+                        <strong>Transfers</strong>
+                        <span>Keep idempotency and payment flow isolated where it belongs.</span>
+                    </article>
+                </div>
+            </article>
+
+            <aside class="status-card">
+                <div class="status-top">
+                    <div>
+                        <span class="pill">Frontend overview</span>
+                        <p class="status-copy">
+                            The backend is still the same FastAPI app. We only split the browser surface into
+                            smaller pages.
+                        </p>
+                    </div>
+                    <button type="button" class="button-secondary" data-health-refresh>
+                        Refresh health
+                    </button>
+                </div>
+
+                <section class="status-box">
+                    <div class="status-indicator" data-health-indicator>Checking API</div>
+                    <p class="status-copy" data-health-detail>Running the first health probe now.</p>
+                </section>
+
+                <section class="meta-box">
+                    <span class="meta-label">Navigation</span>
+                    <p class="meta-value">Use this page as the entry point, then jump into the area you need.</p>
+                </section>
+            </aside>
+        </section>
+
+        <section class="portal-grid">
+            <article class="portal-card">
+                <span class="pill">Users</span>
+                <h3>User management</h3>
+                <p>Create new users and inspect their wallet relation without extra clutter on screen.</p>
+                <a href="/ui/users" class="button button-primary">Go to users</a>
+            </article>
+
+            <article class="portal-card">
+                <span class="pill">Wallets</span>
+                <h3>Wallet lookup</h3>
+                <p>Query wallet state from a focused view that only cares about balances and ownership.</p>
+                <a href="/ui/wallets" class="button button-primary">Go to wallets</a>
+            </article>
+
+            <article class="portal-card">
+                <span class="pill">Transfers</span>
+                <h3>Transfer workspace</h3>
+                <p>Handle amounts, wallet ids and idempotency keys in a page built around the payment flow.</p>
+                <a href="/ui/transfers" class="button button-primary">Go to transfers</a>
+            </article>
+        </section>
+    </main>
+
+    <script src="/static/app.js"></script>
 </body>
 </html>
