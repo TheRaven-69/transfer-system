@@ -143,6 +143,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+!.env.test
+!.env.docker
 
 # Spyder project settings
 .spyderproject
@@ -207,3 +209,4 @@ marimo/_lsp/
 __marimo__/
 
 app.db
+.idea

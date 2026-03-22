@@ -1,5 +1,7 @@
 import os
 
+os.environ.setdefault("ENV_FILE", ".env.test")
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -10,10 +12,6 @@ from app.core.celery_app import celery_app
 from app.db.models import Base, User, Wallet
 from app.db.session import get_db
 from app.main import app
-
-os.environ.setdefault("CELERY_BROKER_URL", "memory://")
-os.environ.setdefault("CELERY_RESULT_BACKEND", "cache+memory://")
-os.environ.setdefault("NOTIFY_DELAY_SEC", "0")
 
 
 class FakeRedis:
