@@ -1,4 +1,3 @@
-import logging
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Header
@@ -9,8 +8,6 @@ from app.services.transfers import create_transfer_idempotent as create_transfer
 
 router = APIRouter(prefix="/transfers", tags=["transfers"])
 
-logger = logging.getLogger(__name__)
-
 
 @router.post("")
 def transfer(
@@ -20,12 +17,6 @@ def transfer(
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ):
-    logger.info(
-        "Transfer endpoint called: from_wallet_id=%s to_wallet_id=%s amount=%s",
-        from_wallet_id,
-        to_wallet_id,
-        amount,
-    )
     transfer = create_transfer(
         db, from_wallet_id, to_wallet_id, amount, idempotency_key
     )

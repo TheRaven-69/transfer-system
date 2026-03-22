@@ -27,3 +27,5 @@ def setup_logging() -> None:
     root_logger.handlers.clear()
     root_logger.setLevel(log_level)
     root_logger.addHandler(handler)
+
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)

@@ -26,26 +26,13 @@ logger = logging.getLogger(__name__)
 def create_transfer(
     db: Session, from_wallet_id: int, to_wallet_id: int, amount: Decimal
 ) -> Transaction:
-    logger.info(
-        "Transfer processing started: from_wallet_id=%s to_wallet_id=%s amount=%s",
-        from_wallet_id,
-        to_wallet_id,
-        amount,
-    )
-
     if from_wallet_id == to_wallet_id:
-        logger.warning(
-            "Transfer rejected: same source and target wallet wallet_id=%s",
-            from_wallet_id,
-        )
         raise CannotTransferToSameWallet()
 
     if amount is None:
-        logger.warning("Transfer rejected: amount is required")
         raise TransferAmountRequired()
 
     if amount <= 0:
-        logger.warning("Transfer rejected: invalid amount=%s", amount)
         raise InvalidTransferAmount()
 
     first_id, second_id = sorted([from_wallet_id, to_wallet_id])
@@ -66,26 +53,12 @@ def create_transfer(
         to_wallet = wallet_map.get(to_wallet_id)
 
         if not from_wallet:
-            logger.warning(
-                "Transfer rejected: source wallet not found wallet_id=%s",
-                from_wallet_id,
-            )
             raise WalletNotFound(from_wallet_id)
 
         if not to_wallet:
-            logger.warning(
-                "Transfer rejected: target wallet not found wallet_id=%s",
-                to_wallet_id,
-            )
             raise WalletNotFound(to_wallet_id)
 
         if from_wallet.balance < amount:
-            logger.warning(
-                "Transfer rejected: insufficient funds wallet_id=%s amount=%s balance=%s",
-                from_wallet_id,
-                amount,
-                from_wallet.balance,
-            )
             raise InsufficientFunds()
 
         from_wallet.balance -= amount
@@ -121,13 +94,6 @@ def create_transfer_idempotent(
     amount: Decimal,
     idempotency_key: str,
 ) -> Transaction:
-    logger.info(
-        "Idempotent transfer request received: from_wallet_id=%s to_wallet_id=%s amount=%s",
-        from_wallet_id,
-        to_wallet_id,
-        amount,
-    )
-
     idem = get_idempotency_manager()
 
     payload = {

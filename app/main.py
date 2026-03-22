@@ -35,8 +35,6 @@ app = FastAPI(title="Transfer System API", lifespan=lifespan)
 app.add_middleware(RequestIDMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-logger.info("Application module loaded")
-
 
 def _error_response(status_code: int, exc: Exception) -> JSONResponse:
     return JSONResponse(
@@ -109,5 +107,4 @@ def transfers_frontend():
 
 @app.get("/health")
 def health():
-    logger.info("Health endpoint called")
     return {"status": "ok"}
