@@ -1,7 +1,14 @@
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
+from app.core.logging import setup_logging
+from app.core.middlaware import RequestIDMiddleware
 from app.db.models import Base
 from app.db.session import engine
 from app.services.exceptions import (
@@ -11,13 +18,41 @@ from app.services.exceptions import (
     NotFound,
 )
 
-app = FastAPI(title="Transfer System API")
+setup_logging()
+logger = logging.getLogger(__name__)
+BASE_DIR = Path(__file__).resolve().parent.parent
+STATIC_DIR = BASE_DIR / "static"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Application startup")
+    yield
+    logger.info("Application shutdown")
+
+
+app = FastAPI(title="Transfer System API", lifespan=lifespan)
+app.add_middleware(RequestIDMiddleware)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 def _error_response(status_code: int, exc: Exception) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={"detail": str(exc)},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(
+        "Unhandled exception occurred: path=%s method=%s",
+        request.url.path,
+        request.method,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
     )
 
 
@@ -46,10 +81,28 @@ Base.metadata.create_all(bind=engine)
 app.include_router(router)
 
 
-@app.get("/", response_class=HTMLResponse)
+def _static_page(filename: str) -> FileResponse:
+    return FileResponse(STATIC_DIR / filename)
+
+
+@app.get("/", response_class=FileResponse)
 def root():
-    with open("static/index.html", "r") as f:
-        return f.read()
+    return _static_page("index.html")
+
+
+@app.get("/ui/users", response_class=FileResponse)
+def users_frontend():
+    return _static_page("users.html")
+
+
+@app.get("/ui/wallets", response_class=FileResponse)
+def wallets_frontend():
+    return _static_page("wallets.html")
+
+
+@app.get("/ui/transfers", response_class=FileResponse)
+def transfers_frontend():
+    return _static_page("transfers.html")
 
 
 @app.get("/health")

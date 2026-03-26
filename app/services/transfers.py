@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -19,14 +20,18 @@ from .exceptions import (
 
 IDEM_RESULT_TTL_SEC = 24 * 3600
 
+logger = logging.getLogger(__name__)
+
 
 def create_transfer(
     db: Session, from_wallet_id: int, to_wallet_id: int, amount: Decimal
 ) -> Transaction:
     if from_wallet_id == to_wallet_id:
         raise CannotTransferToSameWallet()
+
     if amount is None:
         raise TransferAmountRequired()
+
     if amount <= 0:
         raise InvalidTransferAmount()
 
@@ -49,6 +54,7 @@ def create_transfer(
 
         if not from_wallet:
             raise WalletNotFound(from_wallet_id)
+
         if not to_wallet:
             raise WalletNotFound(to_wallet_id)
 
@@ -64,10 +70,19 @@ def create_transfer(
             amount=amount,
         )
         db.add(transfer)
+        db.flush()
 
         on_commit(db, invalidate_wallet_cache, from_wallet_id)
         on_commit(db, invalidate_wallet_cache, to_wallet_id)
         on_commit(db, send_transaction_notification.delay, transfer.id)
+
+        logger.info(
+            "Transfer completed successfully: transfer_id=%s from_wallet_id=%s to_wallet_id=%s amount=%s",
+            transfer.id,
+            from_wallet_id,
+            to_wallet_id,
+            amount,
+        )
 
     return transfer
 
@@ -88,6 +103,5 @@ def create_transfer_idempotent(
     }
     request_hash = hash_payload(payload)
 
-    # Use context manager for reservation and automatic cleanup on failure
     with idem.reserve(f"transfer:{idempotency_key}", request_hash):
         return create_transfer(db, from_wallet_id, to_wallet_id, amount)

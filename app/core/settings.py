@@ -12,11 +12,13 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
+    APP_ENV: str = "dev"
     DATABASE_URL: str
     REDIS_URL: str
     RABBITMQ_URL: str
 
     CACHE_ENABLED: bool = False
+    LOG_LEVEL: str = "INFO"
 
     NOTIFY_FAIL_RATE: float = Field(default=0.0, ge=0.0, le=1.0)
     NOTIFY_DELAY_SEC: float = Field(default=2.0, ge=0.0)

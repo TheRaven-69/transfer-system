@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.db.models import User
@@ -5,6 +7,8 @@ from app.db.tx import transaction_scope
 
 from .exceptions import UserNotFound, UserWalletNotFound
 from .wallets import create_wallet_for_user
+
+logger = logging.getLogger(__name__)
 
 
 def create_user(db: Session) -> User:
@@ -14,6 +18,9 @@ def create_user(db: Session) -> User:
         db.flush()
         wallet = create_wallet_for_user(db, user.id)
         user.wallet = wallet
+        logger.info(
+            "User created successfully: user_id=%s wallet_id=%s", user.id, wallet.id
+        )
     return user
 
 

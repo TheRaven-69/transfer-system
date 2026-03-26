@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transfers | Transfer System</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+    <main class="page">
+        <header class="topbar">
+            <a href="/" class="brand">Transfer System</a>
+            <nav class="nav-links">
+                <a href="/" class="button button-secondary">Home</a>
+                <a href="/ui/users" class="button button-secondary">Users</a>
+                <a href="/ui/wallets" class="button button-secondary">Wallets</a>
+                <a href="/ui/transfers" class="button button-primary">Transfers</a>
+            </nav>
+        </header>
+
+        <section class="page-hero">
+            <article class="hero-card">
+                <span class="eyebrow">Transfers page</span>
+                <h1>Keep the money movement flow isolated and easier to reason about</h1>
+                <p class="hero-copy">
+                    This page is focused on one thing: creating transfers with wallet ids, amount and
+                    idempotency key. It keeps the most sensitive action away from unrelated UI controls.
+                </p>
+                <div class="meta-grid">
+                    <article class="route-card">
+                        <code>POST /transfers</code>
+                        <p>Uses query params plus the required <code>Idempotency-Key</code> header.</p>
+                    </article>
+                    <article class="route-card">
+                        <code>409 Conflict</code>
+                        <p>Expected when there are insufficient funds or a business conflict.</p>
+                    </article>
+                </div>
+            </article>
+
+            <aside class="status-card">
+                <div class="status-top">
+                    <div>
+                        <span class="pill">Status</span>
+                        <p class="status-copy">Health plus latest transfer attempt for this page.</p>
+                    </div>
+                    <button type="button" class="button-secondary" data-health-refresh>
+                        Refresh health
+                    </button>
+                </div>
+                <section class="status-box">
+                    <div class="status-indicator" data-health-indicator>Checking API</div>
+                    <p class="status-copy" data-health-detail>Running the first health probe now.</p>
+                </section>
+                <section class="meta-box">
+                    <span class="meta-label">Latest action</span>
+                    <p class="meta-value" data-last-action>No requests sent yet.</p>
+                </section>
+                <section class="meta-box">
+                    <span class="meta-label">Wallet focus</span>
+                    <p class="meta-value" data-wallet-hint>Transfers do not pin wallets until you run user or wallet lookups.</p>
+                </section>
+            </aside>
+        </section>
+
+        <section class="workspace">
+            <article class="panel wide">
+                <h2 class="panel-title">Transfers workspace</h2>
+                <p class="panel-copy">Compose and send a transfer request from a page dedicated to the payment flow.</p>
+
+                <div class="cards">
+                    <section class="form-card">
+                        <h3>Create transfer</h3>
+                        <p>Calls the transfer endpoint and keeps the idempotency key visible so you can retry safely.</p>
+                        <form data-form="transfer">
+                            <div class="field-row">
+                                <div class="field">
+                                    <label for="from_wallet_id">From wallet</label>
+                                    <input id="from_wallet_id" name="from_wallet_id" type="number" min="1" required />
+                                </div>
+                                <div class="field">
+                                    <label for="to_wallet_id">To wallet</label>
+                                    <input id="to_wallet_id" name="to_wallet_id" type="number" min="1" required />
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label for="amount">Amount</label>
+                                <input id="amount" name="amount" type="number" min="0.01" step="0.01" required />
+                            </div>
+                            <div class="field">
+                                <label for="idempotency_key">Idempotency key</label>
+                                <input id="idempotency_key" name="idempotency_key" type="text" />
+                                <p class="field-hint">Reuse the same key when you want to verify idempotent retries.</p>
+                            </div>
+                            <button type="submit">Send transfer</button>
+                        </form>
+                        <div class="response-preview">
+                            <strong>Latest response</strong>
+                            <pre data-response="transfer">No response yet.</pre>
+                        </div>
+                    </section>
+                </div>
+            </article>
+
+            <aside class="panel narrow">
+                <section class="console">
+                    <div class="console-head">
+                        <h3>API console</h3>
+                        <button type="button" class="muted-button" data-clear-console>Clear</button>
+                    </div>
+                    <p class="console-copy">Raw API responses for transfer requests land here.</p>
+                    <pre data-console-output>Console is ready.
+
+Run a transfer action to inspect the next API response.</pre>
+                </section>
+
+                <section class="timeline">
+                    <h3>Recent actions</h3>
+                    <div class="timeline-list" data-timeline></div>
+                </section>
+            </aside>
+        </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
