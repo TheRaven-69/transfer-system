@@ -210,3 +210,4 @@ __marimo__/
 
 app.db
 .idea
+.env.docker
