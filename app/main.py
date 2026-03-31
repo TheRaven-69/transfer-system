@@ -3,12 +3,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.api.routes import router
 from app.core.logging import setup_logging
-from app.core.middlaware import RequestIDMiddleware
+from app.core.middleware import MetricsMiddleware, RequestIDMiddleware
 from app.db.models import Base
 from app.db.session import engine
 from app.services.exceptions import (
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Transfer System API", lifespan=lifespan)
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(MetricsMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -103,6 +105,14 @@ def wallets_frontend():
 @app.get("/ui/transfers", response_class=FileResponse)
 def transfers_frontend():
     return _static_page("transfers.html")
+
+
+@app.get("/metrics")
+def metrics() -> Response:
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 
 
 @app.get("/health")
