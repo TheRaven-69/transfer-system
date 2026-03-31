@@ -25,7 +25,6 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         start_time = time.perf_counter()
 
         method = request.method
-        path = request.url.path
         status_code = 500
 
         try:
@@ -34,6 +33,8 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             duration = time.perf_counter() - start_time
+            route = request.scope.get("route")
+            path = route.path if route and hasattr(route, "path") else request.url.path
 
             HTTP_REQUESTS_TOTAL.labels(
                 method=method,
