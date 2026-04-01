@@ -10,6 +10,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.api.routes import router
 from app.core.logging import setup_logging
 from app.core.middleware import MetricsMiddleware, RequestIDMiddleware
+from app.core.sentry import init_sentry
 from app.db.models import Base
 from app.db.session import engine
 from app.services.exceptions import (
@@ -20,6 +21,7 @@ from app.services.exceptions import (
 )
 
 setup_logging()
+init_sentry()
 logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "static"

@@ -1,6 +1,9 @@
 from celery import Celery
 
+from app.core.sentry import init_sentry
 from app.core.settings import settings
+
+init_sentry()
 
 celery_app = Celery(
     "transfer_system",

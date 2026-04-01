@@ -51,6 +51,9 @@ typing_extensions==4.15.0
 tzdata==2025.3
 tzlocal==5.3.1
 uvicorn==0.40.0
-vine==5.1.0
-virtualenv==21.2.0
-wcwidth==0.6.0
+redis==5.3.1
+celery==5.6.2
+ruff==0.9.7
+pre-commit==4.1.0
+sentry-sdk==2.56.0
+
