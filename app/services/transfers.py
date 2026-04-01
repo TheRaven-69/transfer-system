@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.metrics import TRANSFERS_CREATED_TOTAL
 from app.db.models import Transaction, Wallet
 from app.db.tx import on_commit, transaction_scope
 from app.idempotency import get_idempotency_manager, hash_payload
@@ -17,8 +18,6 @@ from .exceptions import (
     TransferAmountRequired,
     WalletNotFound,
 )
-
-IDEM_RESULT_TTL_SEC = 24 * 3600
 
 logger = logging.getLogger(__name__)
 
@@ -76,14 +75,14 @@ def create_transfer(
         on_commit(db, invalidate_wallet_cache, to_wallet_id)
         on_commit(db, send_transaction_notification.delay, transfer.id)
 
-        logger.info(
-            "Transfer completed successfully: transfer_id=%s from_wallet_id=%s to_wallet_id=%s amount=%s",
-            transfer.id,
-            from_wallet_id,
-            to_wallet_id,
-            amount,
-        )
-
+    logger.info(
+        "Transfer completed successfully: transfer_id=%s from_wallet_id=%s to_wallet_id=%s amount=%s",
+        transfer.id,
+        from_wallet_id,
+        to_wallet_id,
+        amount,
+    )
+    TRANSFERS_CREATED_TOTAL.inc()
     return transfer
 
 
