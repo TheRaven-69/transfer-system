@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  nginx.conf: |
+    events {}
+
+    http {
+      gzip on;
+      gzip_comp_level 5;
+      gzip_min_length 1024;
+      gzip_vary on;
+      gzip_proxied any;
+      gzip_types application/json text/plain text/css application/javascript application/xml image/svg+xml;
+      limit_req_zone $binary_remote_addr zone=transfer_zone:10m rate=20r/s;
+
+      server {
+        listen 80;
+
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 65s;
+        send_timeout 65s;
+        proxy_buffering on;
+        proxy_buffers 16 32k;
+        proxy_buffer_size 32k;
+        proxy_busy_buffers_size 64k;
+
+        location ^~ /transfers {
+          limit_req zone=transfer_zone burst=5 nodelay;
+
+          proxy_pass http://transfer-app:8000;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location / {
+          proxy_pass http://transfer-app:8000;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transfer-nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transfer-nginx
+  template:
+    metadata:
+      labels:
+        app: transfer-nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transfer-nginx
+spec:
+  selector:
+    app: transfer-nginx
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP
