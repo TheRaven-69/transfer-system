@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transfer-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transfer-worker
+  template:
+    metadata:
+      labels:
+        app: transfer-worker
+    spec:
+      containers:
+        - name: transfer-worker
+          image: transfer-system:latest
+          imagePullPolicy: Never
+          command:
+            - celery
+          args:
+            - -A
+            - app.core.celery_app.celery_app
+            - worker
+            - --loglevel=info
+          envFrom:
+            - configMapRef:
+                name: transfer-system-config
+            - secretRef:
+                name: transfer-system-secrets
