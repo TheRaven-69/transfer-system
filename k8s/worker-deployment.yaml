@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: transfer-worker
+  namespace: transfer-system
 spec:
   replicas: 1
   selector:
@@ -28,3 +29,30 @@ spec:
                 name: transfer-system-config
             - secretRef:
                 name: transfer-system-secrets
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - celery -A app.core.celery_app.celery_app inspect ping -d celery@$HOSTNAME | grep -q OK
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - celery -A app.core.celery_app.celery_app inspect ping -d celery@$HOSTNAME | grep -q OK
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "1024Mi"

@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: rabbitmq
+  namespace: transfer-system
 spec:
   replicas: 1
   selector:
@@ -15,6 +16,17 @@ spec:
       containers:
         - name: rabbitmq
           image: rabbitmq:3-management
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: transfer-system-secrets
+                  key: RABBITMQ_DEFAULT_USER
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: transfer-system-secrets
+                  key: RABBITMQ_DEFAULT_PASS
           ports:
             - containerPort: 5672
             - containerPort: 15672
@@ -25,11 +37,28 @@ spec:
                 - ping
             initialDelaySeconds: 10
             periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - rabbitmq-diagnostics
+                - ping
+            initialDelaySeconds: 45
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "768Mi"
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: rabbitmq
+  namespace: transfer-system
 spec:
   selector:
     app: rabbitmq

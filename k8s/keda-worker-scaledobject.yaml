@@ -1,7 +1,19 @@
 apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: rabbitmq-trigger-auth
+  namespace: transfer-system
+spec:
+  secretTargetRef:
+    - parameter: host
+      name: transfer-system-secrets
+      key: RABBITMQ_URL
+---
+apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: transfer-worker-scaledobject
+  namespace: transfer-system
 spec:
   scaleTargetRef:
     name: transfer-worker
@@ -19,4 +31,5 @@ spec:
         queueName: celery
         mode: QueueLength
         value: "5"
-        host: amqp://guest:guest@rabbitmq.default.svc.cluster.local:5672//
+      authenticationRef:
+        name: rabbitmq-trigger-auth

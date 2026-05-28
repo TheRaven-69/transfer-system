@@ -2,6 +2,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: transfer-app-hpa
+  namespace: transfer-system
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
