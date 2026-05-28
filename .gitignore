@@ -211,6 +211,6 @@ __marimo__/
 app.db
 .idea
 .env.docker
-.configmap.yaml
-.secret.yaml
+k8s/configmap.yaml
+k8s/secret.yaml
 .requirements-dev.txt
