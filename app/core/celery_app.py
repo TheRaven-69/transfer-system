@@ -1,4 +1,4 @@
-from celery import Celery
+from celery import Celery  # type: ignore[import-untyped]
 
 from app.core.sentry import init_sentry
 from app.core.settings import settings

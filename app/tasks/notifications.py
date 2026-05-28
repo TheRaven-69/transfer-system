@@ -1,8 +1,10 @@
-import random
+import secrets
 import time
 
 from app.core.celery_app import celery_app
 from app.core.settings import settings
+
+_random = secrets.SystemRandom()
 
 
 @celery_app.task(
@@ -15,7 +17,7 @@ def send_transaction_notification(self, transfer_id: int):
     if settings.NOTIFY_DELAY_SEC > 0:
         time.sleep(settings.NOTIFY_DELAY_SEC)
 
-    if random.random() < settings.NOTIFY_FAIL_RATE:
+    if _random.random() < settings.NOTIFY_FAIL_RATE:
         raise Exception("Simulated notification failure")
 
     print(f"[notify] Notification sent for transfer_id={transfer_id}")
