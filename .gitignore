@@ -213,4 +213,4 @@ app.db
 .env.docker
 k8s/configmap.yaml
 k8s/secret.yaml
-.requirements-dev.txt
+requirements-dev.txt
