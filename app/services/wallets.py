@@ -61,9 +61,13 @@ def create_wallet_for_user(db: Session, user_id: int) -> Wallet:
 
     on_commit(db, invalidate_wallet_cache, wallet.id)
     logger.info(
-        "Wallet created successfully: wallet_id=%s user_id=%s balance=%s",
-        wallet.id,
-        user_id,
-        wallet.balance,
+        "wallet_created",
+        extra={
+            "extra_fields": {
+                "wallet_id": wallet.id,
+                "user_id": user_id,
+                "balance": str(wallet.balance),
+            }
+        },
     )
     return wallet

@@ -1,6 +1,9 @@
 from celery import Celery
 
+from app.core.logging import setup_logging
 from app.core.settings import settings
+
+setup_logging()
 
 celery_app = Celery(
     "transfer_system",

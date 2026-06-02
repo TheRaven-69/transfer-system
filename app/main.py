@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
 from app.core.logging import setup_logging
-from app.core.middlaware import RequestIDMiddleware
+from app.core.middleware import RequestIDMiddleware
 from app.db.models import Base
 from app.db.session import engine
 from app.services.exceptions import (
@@ -26,9 +26,9 @@ STATIC_DIR = BASE_DIR / "static"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Application startup")
+    logger.info("application_startup")
     yield
-    logger.info("Application shutdown")
+    logger.info("application_shutdown")
 
 
 app = FastAPI(title="Transfer System API", lifespan=lifespan)
@@ -46,9 +46,13 @@ def _error_response(status_code: int, exc: Exception) -> JSONResponse:
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception(
-        "Unhandled exception occurred: path=%s method=%s",
-        request.url.path,
-        request.method,
+        "unhandled exception",
+        extra={
+            "extra_fields": {
+                "path": request.url.path,
+                "method": request.method,
+            }
+        },
     )
     return JSONResponse(
         status_code=500,

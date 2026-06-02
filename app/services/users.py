@@ -19,7 +19,14 @@ def create_user(db: Session) -> User:
         wallet = create_wallet_for_user(db, user.id)
         user.wallet = wallet
         logger.info(
-            "User created successfully: user_id=%s wallet_id=%s", user.id, wallet.id
+            "user_created",
+            extra={
+                "extra_fields": {
+                    "wallet_id": wallet.id,
+                    "user_id": user.id,
+                    "balance": str(wallet.balance),
+                }
+            },
         )
     return user
 

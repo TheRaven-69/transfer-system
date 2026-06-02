@@ -1,7 +1,10 @@
+import logging
 from contextlib import contextmanager
 from typing import Any, Callable
 
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 
 def on_commit(db: Session, func: Callable, *args: Any, **kwargs: Any) -> None:
@@ -37,9 +40,16 @@ def transaction_scope(db: Session):
             for f, a, k in hooks:
                 try:
                     f(*a, **k)
-                except Exception as e:
-                    # Isolation: one failing hook doesn't affect others.
-                    print(f"Post-commit hook failed: {e}")
+
+                except Exception:
+                    logger.exception(
+                        "post_commit_hook_failed",
+                        extra={
+                            "extra_fields": {
+                                "hook_name": getattr(f, "__name__", str(f)),
+                            }
+                        },
+                    )
         except Exception:
             # Clear hooks on failure to prevent leakage to next transaction
             db._post_commit_hooks = []

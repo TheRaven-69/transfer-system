@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.request_context import request_id_ctx
 from app.db.models import Transaction, Wallet
 from app.db.tx import on_commit, transaction_scope
 from app.idempotency import get_idempotency_manager, hash_payload
@@ -24,7 +25,11 @@ logger = logging.getLogger(__name__)
 
 
 def create_transfer(
-    db: Session, from_wallet_id: int, to_wallet_id: int, amount: Decimal
+    db: Session,
+    from_wallet_id: int,
+    to_wallet_id: int,
+    amount: Decimal,
+    idempotency_key: str | None = None,
 ) -> Transaction:
     if from_wallet_id == to_wallet_id:
         raise CannotTransferToSameWallet()
@@ -71,17 +76,29 @@ def create_transfer(
         )
         db.add(transfer)
         db.flush()
+        request_id = request_id_ctx.get()
 
         on_commit(db, invalidate_wallet_cache, from_wallet_id)
         on_commit(db, invalidate_wallet_cache, to_wallet_id)
-        on_commit(db, send_transaction_notification.delay, transfer.id)
+        on_commit(
+            db,
+            send_transaction_notification.delay,
+            transfer.id,
+            request_id,
+        )
+
+        log_fields = {
+            "transfer_id": transfer.id,
+            "from_wallet_id": from_wallet_id,
+            "to_wallet_id": to_wallet_id,
+            "amount": str(amount),
+        }
+        if idempotency_key is not None:
+            log_fields["idempotency_key"] = idempotency_key
 
         logger.info(
-            "Transfer completed successfully: transfer_id=%s from_wallet_id=%s to_wallet_id=%s amount=%s",
-            transfer.id,
-            from_wallet_id,
-            to_wallet_id,
-            amount,
+            "transfer_created",
+            extra={"extra_fields": log_fields},
         )
 
     return transfer
@@ -104,4 +121,10 @@ def create_transfer_idempotent(
     request_hash = hash_payload(payload)
 
     with idem.reserve(f"transfer:{idempotency_key}", request_hash):
-        return create_transfer(db, from_wallet_id, to_wallet_id, amount)
+        return create_transfer(
+            db,
+            from_wallet_id,
+            to_wallet_id,
+            amount,
+            idempotency_key=idempotency_key,
+        )
