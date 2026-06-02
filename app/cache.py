@@ -28,6 +28,9 @@ class Cache:
             if isinstance(data, bytes):
                 data = data.decode("utf-8")
 
+            if not isinstance(data, str):
+                return None
+
             return json.loads(data) if json_decode else data
         except (RedisError, json.JSONDecodeError, TypeError):
             return None

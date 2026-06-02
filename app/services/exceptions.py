@@ -1,6 +1,8 @@
 class ServiceError(Exception):
     """Base class for exceptions in this service."""
 
+    message = "Service error"
+
     def __str__(self) -> str:
         return self.message
 
@@ -24,28 +26,19 @@ class Conflict(ServiceError):
 class UserNotFound(NotFound):
     def __init__(self, user_id: int) -> None:
         self.user_id = user_id
-
-    @property
-    def message(self) -> str:
-        return f"User with id {self.user_id} not found."
+        self.message = f"User with id {self.user_id} not found."
 
 
 class WalletNotFound(NotFound):
     def __init__(self, wallet_id: int) -> None:
         self.wallet_id = wallet_id
-
-    @property
-    def message(self) -> str:
-        return f"Wallet with id {self.wallet_id} not found."
+        self.message = f"Wallet with id {self.wallet_id} not found."
 
 
 class UserWalletNotFound(NotFound):
     def __init__(self, user_id: int) -> None:
         self.user_id = user_id
-
-    @property
-    def message(self) -> str:
-        return f"Wallet for user with id {self.user_id} not found."
+        self.message = f"Wallet for user with id {self.user_id} not found."
 
 
 class CannotTransferToSameWallet(BadRequest):

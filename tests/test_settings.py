@@ -51,6 +51,21 @@ def test_invalid_redis_url_fails_fast():
         make_settings(REDIS_URL="not-a-url")
 
 
+def test_invalid_redis_scheme_fails_fast():
+    with pytest.raises(ValidationError):
+        make_settings(REDIS_URL="http://redis:6379/0")
+
+
+def test_invalid_rabbitmq_url_fails_fast():
+    with pytest.raises(ValidationError):
+        make_settings(RABBITMQ_URL="redis://rabbitmq:5672//")
+
+
+def test_invalid_sentry_dsn_fails_fast():
+    with pytest.raises(ValidationError):
+        make_settings(SENTRY_DSN="banana")
+
+
 def test_empty_sentry_dsn_becomes_none():
     settings = make_settings(SENTRY_DSN="")
 
@@ -61,3 +76,17 @@ def test_sqlite_database_url_allowed_for_tests():
     settings = make_settings(DATABASE_URL="sqlite+pysqlite:///:memory:")
 
     assert settings.DATABASE_URL == "sqlite+pysqlite:///:memory:"
+
+
+@pytest.mark.parametrize("field", ["DATABASE_URL", "REDIS_URL", "RABBITMQ_URL"])
+def test_critical_urls_are_required(field):
+    data = {
+        "APP_ENV": "test",
+        "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+        "REDIS_URL": "redis://localhost:6379/0",
+        "RABBITMQ_URL": "memory://",
+    }
+    data.pop(field)
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **data)

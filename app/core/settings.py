@@ -1,7 +1,7 @@
 import os
 from typing import Literal
 
-from pydantic import AnyUrl, Field, field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "transfer_db"
 
     DATABASE_URL: str
-    REDIS_URL: AnyUrl
-    RABBITMQ_URL: AnyUrl
+    REDIS_URL: str
+    RABBITMQ_URL: str
 
     CACHE_ENABLED: bool = False
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
@@ -50,6 +50,28 @@ class Settings(BaseSettings):
 
         return value
 
+    @field_validator("REDIS_URL")
+    @classmethod
+    def validate_redis_url(cls, value: str) -> str:
+        allowed_prefixes = ("redis://", "rediss://")
+
+        if not value.startswith(allowed_prefixes):
+            raise ValueError("REDIS_URL must start with redis:// or rediss://")
+
+        return value
+
+    @field_validator("RABBITMQ_URL")
+    @classmethod
+    def validate_rabbitmq_url(cls, value: str) -> str:
+        allowed_prefixes = ("amqp://", "amqps://", "memory://")
+
+        if not value.startswith(allowed_prefixes):
+            raise ValueError(
+                "RABBITMQ_URL must start with amqp://, amqps:// or memory://"
+            )
+
+        return value
+
     @field_validator("SENTRY_DSN", mode="before")
     @classmethod
     def empty_sentry_dsn_is_none(cls, v: str | None) -> str | None:
@@ -57,5 +79,16 @@ class Settings(BaseSettings):
             return None
         return v
 
+    @field_validator("SENTRY_DSN")
+    @classmethod
+    def validate_sentry_dsn(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
 
-settings = Settings()
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("SENTRY_DSN must start with http:// or https://")
+
+        return value
+
+
+settings = Settings()  # type: ignore[call-arg]
