@@ -10,6 +10,32 @@ patterns.
 
 ============================================================
 
+OBSERVABILITY
+
+The Docker Compose environment includes Prometheus, Grafana, Alertmanager,
+PostgreSQL exporter, Redis exporter, and the RabbitMQ Prometheus plugin.
+
+Access:
+
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000
+- Alertmanager: http://localhost:9093
+- RabbitMQ metrics: http://localhost:15692/metrics
+
+Grafana automatically provisions the Prometheus datasource and the
+"Transfer System Overview" dashboard.
+
+The dashboard includes API request rate, 5xx ratio, p95/p99 latency,
+transfers per minute, transfer amount, wallet cache hit ratio, ledger
+balance delta, database query latency, RabbitMQ queue load, PostgreSQL
+connections, and Redis memory usage.
+
+Prometheus alert rules monitor API error rate, ledger consistency, RabbitMQ
+queue backlog, API p95 latency, database query errors, and ledger metric
+collection failures.
+
+============================================================
+
 🚀 CORE FEATURES
 
 -   User creation

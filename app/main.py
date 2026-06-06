@@ -10,7 +10,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.api.routes import router
 from app.core.logging import setup_logging
-from app.core.metrics import HTTP_EXCEPTIONS_TOTAL
+from app.core.metrics import HTTP_EXCEPTIONS_TOTAL, refresh_ledger_metrics
 from app.core.middleware import MetricsMiddleware, RequestIDMiddleware
 from app.core.sentry import init_sentry
 from app.db.models import Base
@@ -127,6 +127,7 @@ def transfers_frontend():
 
 @app.get("/metrics")
 def metrics() -> Response:
+    refresh_ledger_metrics()
     return Response(
         content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST,

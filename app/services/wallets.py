@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.cache import get_cache
+from app.core.metrics import WALLET_CACHE_HITS_TOTAL, WALLET_CACHE_MISSES_TOTAL
 from app.db.models import User, Wallet
 from app.db.tx import on_commit
 
@@ -28,8 +29,10 @@ def get_wallet_cached(db: Session, wallet_id: int) -> dict:
 
     data = cache.get(key)
     if data:
+        WALLET_CACHE_HITS_TOTAL.inc()
         return data
 
+    WALLET_CACHE_MISSES_TOTAL.inc()
     wallet = _get_wallet_from_db(db, wallet_id)
     data = {
         "id": wallet.id,

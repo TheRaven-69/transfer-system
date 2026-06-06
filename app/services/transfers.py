@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.metrics import TRANSFERS_CREATED_TOTAL
+from app.core.metrics import TRANSFER_AMOUNT_TOTAL, TRANSFERS_CREATED_TOTAL
 from app.db.models import Transaction, Wallet
 from app.db.tx import on_commit, transaction_scope
 from app.idempotency import get_idempotency_manager, hash_payload
@@ -83,6 +83,7 @@ def create_transfer(
         amount,
     )
     TRANSFERS_CREATED_TOTAL.inc()
+    TRANSFER_AMOUNT_TOTAL.inc(float(amount))
     return transfer
 
 

@@ -38,7 +38,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         finally:
             duration = time.perf_counter() - start_time
             route = request.scope.get("route")
-            path = route.path if route and hasattr(route, "path") else request.url.path
+            path = route.path if route and hasattr(route, "path") else "__unmatched__"
             if status_code < 400:
                 outcome = "successful"
             elif status_code < 500:
