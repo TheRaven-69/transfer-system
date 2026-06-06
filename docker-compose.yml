@@ -82,7 +82,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     ports:
-      - "8080:80"
+      - "8081:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -104,6 +104,10 @@ services:
     depends_on:
       app:
         condition: service_healthy
+      postgres-exporter:
+        condition: service_started
+      redis-exporter:
+        condition: service_started
 
   grafana:
     image: grafana/grafana:latest
@@ -113,3 +117,28 @@ services:
     depends_on:
       prometheus:
         condition: service_healthy
+
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: transfer_postgres_exporter
+    restart: always
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:postgres@db:5432/transfer_db?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  redis-exporter:
+    image: oliver006/redis_exporter
+    container_name: transfer_redis_exporter
+    restart: always
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    ports:
+      - "9121:9121"
+    depends_on:
+      redis:
+        condition: service_healthy      
