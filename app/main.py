@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.routes import router
 from app.core.logging import setup_logging
 from app.core.middlaware import RequestIDMiddleware
+from app.core.request_context import request_id_ctx
 from app.core.sentry import init_sentry
 from app.db.models import Base
 from app.db.session import engine
@@ -47,14 +49,31 @@ def _error_response(status_code: int, exc: Exception) -> JSONResponse:
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    request_id = request_id_ctx.get("-")
+
+    sentry_sdk.set_context(
+        "error_context",
+        {
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+        },
+    )
+    sentry_sdk.capture_exception(exc)
+
     logger.exception(
-        "Unhandled exception occurred: path=%s method=%s",
+        "Unhandled exception occurred: request_id=%s path=%s method=%s",
+        request_id,
         request.url.path,
         request.method,
     )
+
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error"},
+        content={
+            "detail": "Internal server error",
+            "request_id": request_id,
+        },
     )
 
 
