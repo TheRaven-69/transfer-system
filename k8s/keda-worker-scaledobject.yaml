@@ -1,4 +1,4 @@
-apiVersion: keda.sh/v1alpha1
+apiVersion: keda.sh/v1beta1
 kind: TriggerAuthentication
 metadata:
   name: rabbitmq-trigger-auth
@@ -9,7 +9,7 @@ spec:
       name: transfer-system-secrets
       key: RABBITMQ_URL
 ---
-apiVersion: keda.sh/v1alpha1
+apiVersion: keda.sh/v1beta1
 kind: ScaledObject
 metadata:
   name: transfer-worker-scaledobject
