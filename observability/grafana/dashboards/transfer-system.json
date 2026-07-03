@@ -96,9 +96,9 @@
       "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
       "id": 7,
       "targets": [
-        {"expr": "ledger_balance_delta", "legendFormat": "ledger delta"}
+        {"expr": "ledger_balance_total", "legendFormat": "total balance"}
       ],
-      "title": "Ledger Balance Delta",
+      "title": "Ledger Balance Total",
       "type": "timeseries"
     },
     {
@@ -145,6 +145,19 @@
         }
       ],
       "title": "PostgreSQL Connections",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+      "id": 12,
+      "targets": [
+        {"expr": "wallet_count", "legendFormat": "wallets"},
+        {"expr": "user_count", "legendFormat": "users"},
+        {"expr": "transaction_count", "legendFormat": "transactions"}
+      ],
+      "title": "System Entity Counts",
       "type": "timeseries"
     },
     {

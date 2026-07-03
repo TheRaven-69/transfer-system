@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from prometheus_client import Counter, Gauge, Histogram
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -46,24 +44,34 @@ WALLET_CACHE_MISSES_TOTAL = Counter(
     "Total number of wallet cache misses",
 )
 
+WALLET_COUNT = Gauge(
+    "wallet_count",
+    "Current number of wallets",
+)
+
+USER_COUNT = Gauge(
+    "user_count",
+    "Current number of users",
+)
+
+TRANSACTION_COUNT = Gauge(
+    "transaction_count",
+    "Current number of transactions",
+)
+
 LEDGER_BALANCE_TOTAL = Gauge(
     "ledger_balance_total",
     "Current sum of all wallet balances",
 )
 
-LEDGER_EXPECTED_BALANCE_TOTAL = Gauge(
-    "ledger_expected_balance_total",
-    "Expected sum of all wallet balances based on initial wallet funding",
+METRICS_COLLECTION_SUCCESS = Gauge(
+    "metrics_collection_success",
+    "Whether the latest system metrics collection succeeded",
 )
 
-LEDGER_BALANCE_DELTA = Gauge(
-    "ledger_balance_delta",
-    "Difference between current and expected wallet balance totals",
-)
-
-LEDGER_METRICS_COLLECTION_ERRORS_TOTAL = Counter(
-    "ledger_metrics_collection_errors_total",
-    "Total number of failures while collecting ledger metrics",
+SYSTEM_METRICS_COLLECTION_ERRORS_TOTAL = Counter(
+    "system_metrics_collection_errors_total",
+    "Total number of failures while collecting system metrics",
 )
 
 DB_QUERY_DURATION_SECONDS = Histogram(
@@ -78,28 +86,28 @@ DB_QUERY_ERRORS_TOTAL = Counter(
     ["operation"],
 )
 
-INITIAL_WALLET_BALANCE = Decimal("100.00")
 
-
-def refresh_ledger_metrics() -> None:
-    from app.db.models import Wallet
+def refresh_system_metrics() -> None:
+    from app.db.models import Transaction, User, Wallet
     from app.db.session import SessionLocal
 
     try:
         with SessionLocal() as db:
-            total_balance, wallet_count = db.execute(
-                select(
-                    func.coalesce(func.sum(Wallet.balance), 0),
-                    func.count(Wallet.id),
-                )
-            ).one()
+            wallet_count = db.execute(select(func.count(Wallet.id))).scalar_one()
+            user_count = db.execute(select(func.count(User.id))).scalar_one()
+            transaction_count = db.execute(
+                select(func.count(Transaction.id))
+            ).scalar_one()
+            total_balance = db.execute(
+                select(func.coalesce(func.sum(Wallet.balance), 0))
+            ).scalar_one()
     except SQLAlchemyError:
-        LEDGER_METRICS_COLLECTION_ERRORS_TOTAL.inc()
+        SYSTEM_METRICS_COLLECTION_ERRORS_TOTAL.inc()
+        METRICS_COLLECTION_SUCCESS.set(0)
         return
 
-    current = Decimal(total_balance)
-    expected = Decimal(wallet_count) * INITIAL_WALLET_BALANCE
-
-    LEDGER_BALANCE_TOTAL.set(float(current))
-    LEDGER_EXPECTED_BALANCE_TOTAL.set(float(expected))
-    LEDGER_BALANCE_DELTA.set(float(current - expected))
+    WALLET_COUNT.set(wallet_count)
+    USER_COUNT.set(user_count)
+    TRANSACTION_COUNT.set(transaction_count)
+    LEDGER_BALANCE_TOTAL.set(float(total_balance))
+    METRICS_COLLECTION_SUCCESS.set(1)
