@@ -5,10 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.request_context import request_id_ctx
-from app.core.sentry import idempotency_key_fingerprint, set_transfer_context
 from app.db.models import Transaction, Wallet
 from app.db.tx import on_commit, transaction_scope
-from app.idempotency import get_idempotency_manager, hash_payload
+from app.idempotency import (
+    get_idempotency_manager,
+    hash_payload,
+    idempotency_key_fingerprint,
+)
 from app.services.wallets import invalidate_wallet_cache
 from app.tasks.notifications import send_transaction_notification
 
@@ -67,8 +70,6 @@ def create_transfer(
         if from_wallet.balance < amount:
             raise InsufficientFunds()
 
-        set_transfer_context(user_id=from_wallet.user_id)
-
         from_wallet.balance -= amount
         to_wallet.balance += amount
 
@@ -79,7 +80,6 @@ def create_transfer(
         )
         db.add(transfer)
         db.flush()
-        set_transfer_context(transfer_id=transfer.id, user_id=from_wallet.user_id)
 
         on_commit(db, invalidate_wallet_cache, from_wallet_id)
         on_commit(db, invalidate_wallet_cache, to_wallet_id)
@@ -112,7 +112,6 @@ def create_transfer_idempotent(
 ) -> Transaction:
     idem = get_idempotency_manager()
     fingerprint = idempotency_key_fingerprint(idempotency_key)
-    set_transfer_context(idempotency_fingerprint=fingerprint)
 
     payload = {
         "from_wallet_id": from_wallet_id,

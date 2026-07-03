@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
 from app.core.logging import setup_logging
-from app.core.middlaware import RequestIDMiddleware
+from app.core.middleware import SentryMiddleware
 from app.core.request_context import request_id_ctx
 from app.core.sentry import init_sentry
 from app.db.models import Base
@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Transfer System API", lifespan=lifespan)
-app.add_middleware(RequestIDMiddleware)
+app.add_middleware(SentryMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -51,14 +51,6 @@ def _error_response(status_code: int, exc: Exception) -> JSONResponse:
 async def unhandled_exception_handler(request: Request, exc: Exception):
     request_id = request_id_ctx.get("-")
 
-    sentry_sdk.set_context(
-        "error_context",
-        {
-            "request_id": request_id,
-            "method": request.method,
-            "path": request.url.path,
-        },
-    )
     sentry_sdk.capture_exception(exc)
 
     logger.exception(

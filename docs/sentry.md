@@ -10,10 +10,17 @@ SENTRY_ENVIRONMENT=staging
 SENTRY_RELEASE=<git-sha-or-image-version>
 SENTRY_TRACES_SAMPLE_RATE=0.1
 SENTRY_PROFILES_SAMPLE_RATE=0.0
+SENTRY_EXTRA_SENSITIVE_KEYS=credential,private-key
 ```
+
+These values are loaded by the optional `SentrySettings` group exposed as
+`settings.sentry`.
 
 When `SENTRY_ENVIRONMENT` is omitted, `APP_ENV` is used. When `SENTRY_DSN` is
 empty, Sentry is disabled.
+
+`SENTRY_EXTRA_SENSITIVE_KEYS` extends the default filtering list. Values can be
+comma-separated or a JSON array.
 
 `/health` transactions are not sampled. Redis span descriptions are filtered
 because they may contain cache or idempotency keys.

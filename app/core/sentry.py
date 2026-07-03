@@ -1,5 +1,3 @@
-import hashlib
-
 import sentry_sdk
 from sentry_sdk.integrations.celery import CeleryIntegration
 from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -8,26 +6,26 @@ from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from app.core.settings import settings
+from app.idempotency import idempotency_key_fingerprint
 
-SENSITIVE_KEYS = {
-    "authorization",
-    "cookie",
-    "set-cookie",
-    "password",
-    "token",
-    "access_token",
-    "refresh_token",
-    "idempotency-key",
-    "idempotency_key",
-}
-_sentry_initialized = False
+
+def _sensitive_key_marker(key: str) -> str:
+    return str(key).lower().replace("-", "").replace("_", "")
+
+
+def _is_sensitive_key(key) -> bool:
+    normalized_key = _sensitive_key_marker(key)
+    return any(
+        _sensitive_key_marker(sensitive_key) in normalized_key
+        for sensitive_key in settings.sentry.all_sensitive_keys
+    )
 
 
 def _mask_sensitive_data(data):
     if isinstance(data, dict):
         cleaned = {}
         for key, value in data.items():
-            if str(key).lower() in SENSITIVE_KEYS:
+            if _is_sensitive_key(key):
                 cleaned[key] = "[Filtered]"
             else:
                 cleaned[key] = _mask_sensitive_data(value)
@@ -69,11 +67,7 @@ def traces_sampler(sampling_context):
     if parent_sampled is not None:
         return parent_sampled
 
-    return settings.SENTRY_TRACES_SAMPLE_RATE
-
-
-def idempotency_key_fingerprint(idempotency_key: str) -> str:
-    return hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:16]
+    return settings.sentry.traces_sample_rate
 
 
 def set_transfer_context(
@@ -103,17 +97,15 @@ def set_transfer_context(
 
 
 def init_sentry() -> None:
-    global _sentry_initialized
-
-    if _sentry_initialized or not settings.SENTRY_DSN:
+    if not settings.sentry.dsn:
         return
 
     sentry_sdk.init(
-        dsn=str(settings.SENTRY_DSN),
-        environment=settings.SENTRY_ENVIRONMENT or settings.APP_ENV,
-        release=settings.SENTRY_RELEASE,
+        dsn=str(settings.sentry.dsn),
+        environment=settings.sentry.environment or settings.APP_ENV,
+        release=settings.sentry.release,
         traces_sampler=traces_sampler,
-        profiles_sample_rate=settings.SENTRY_PROFILES_SAMPLE_RATE,
+        profiles_sample_rate=settings.sentry.profiles_sample_rate,
         send_default_pii=False,
         before_send=before_send,
         before_send_transaction=before_send_transaction,
@@ -125,4 +117,3 @@ def init_sentry() -> None:
             RedisIntegration(),
         ],
     )
-    _sentry_initialized = True
