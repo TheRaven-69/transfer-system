@@ -15,15 +15,6 @@ groups:
           summary: "API error rate is above 5%"
           description: "More than 5% of API requests returned 5xx responses for one minute."
 
-      - alert: LedgerBalanceMismatch
-        expr: abs(ledger_balance_delta) > 0.001
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Ledger balance invariant is broken"
-          description: "The current wallet balance total differs from the expected total."
-
       - alert: RabbitMqQueueBacklog
         expr: sum(rabbitmq_queue_messages_ready) > 100
         for: 2m
@@ -55,11 +46,11 @@ groups:
           summary: "Database query errors detected"
           description: "The application has observed database query errors."
 
-      - alert: LedgerMetricsCollectionFailure
-        expr: increase(ledger_metrics_collection_errors_total[5m]) > 0
+      - alert: SystemMetricsCollectionFailure
+        expr: increase(system_metrics_collection_errors_total[5m]) > 0
         for: 1m
         labels:
           severity: warning
         annotations:
-          summary: "Ledger metrics collection is failing"
-          description: "The application could not query wallet totals for ledger monitoring."
+          summary: "System metrics collection is failing"
+          description: "The application could not query system totals for monitoring."

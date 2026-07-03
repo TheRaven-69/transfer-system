@@ -1,10 +1,10 @@
 import logging
+from dataclasses import dataclass
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from app.cache import get_cache
-from app.core.metrics import WALLET_CACHE_HITS_TOTAL, WALLET_CACHE_MISSES_TOTAL
 from app.db.models import User, Wallet
 from app.db.tx import on_commit
 
@@ -16,6 +16,12 @@ WALLET_CACHE_PREFIX = "wallet:"
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class WalletCacheResult:
+    data: dict
+    cache_hit: bool
+
+
 def _get_wallet_from_db(db: Session, wallet_id: int) -> Wallet:
     wallet = db.get(Wallet, wallet_id)
     if not wallet:
@@ -23,16 +29,14 @@ def _get_wallet_from_db(db: Session, wallet_id: int) -> Wallet:
     return wallet
 
 
-def get_wallet_cached(db: Session, wallet_id: int) -> dict:
+def get_wallet_cached(db: Session, wallet_id: int) -> WalletCacheResult:
     cache = get_cache()
     key = f"{WALLET_CACHE_PREFIX}{wallet_id}"
 
     data = cache.get(key)
     if data:
-        WALLET_CACHE_HITS_TOTAL.inc()
-        return data
+        return WalletCacheResult(data=data, cache_hit=True)
 
-    WALLET_CACHE_MISSES_TOTAL.inc()
     wallet = _get_wallet_from_db(db, wallet_id)
     data = {
         "id": wallet.id,
@@ -41,7 +45,7 @@ def get_wallet_cached(db: Session, wallet_id: int) -> dict:
     }
 
     cache.set(key, data, ex=CACHE_TTL_SECONDS)
-    return data
+    return WalletCacheResult(data=data, cache_hit=False)
 
 
 def invalidate_wallet_cache(wallet_id: int) -> None:

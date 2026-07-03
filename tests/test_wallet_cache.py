@@ -75,9 +75,10 @@ def test_cache_hit_returns_cached_and_skips_db(monkeypatch):
 
     db = DummyDB(fail=True)  # якщо звернемось до БД — тест впаде
 
-    data = wallets_service.get_wallet_cached(db, 1)
+    result = wallets_service.get_wallet_cached(db, 1)
 
-    assert data == cached
+    assert result.data == cached
+    assert result.cache_hit is True
     assert db.calls == 0
     assert r.get_calls == ["wallet:1"]
 
@@ -94,8 +95,10 @@ def test_cache_miss_fetches_db_and_sets_cache(monkeypatch):
     wallet = DummyWallet(wallet_id=2, balance="100.00", user_id=10)
     db = DummyDB(wallet_obj=wallet)
 
-    data = wallets_service.get_wallet_cached(db, 2)
+    result = wallets_service.get_wallet_cached(db, 2)
 
+    data = result.data
+    assert result.cache_hit is False
     assert data["id"] == 2
     assert data["balance"] == "100.00"
     assert data["user_id"] == 10
@@ -121,9 +124,10 @@ def test_redis_unavailable_falls_back_to_db(monkeypatch):
     wallet = DummyWallet(wallet_id=3, balance="77.00", user_id=11)
     db = DummyDB(wallet_obj=wallet)
 
-    data = wallets_service.get_wallet_cached(db, 3)
+    result = wallets_service.get_wallet_cached(db, 3)
 
-    assert data == {"id": 3, "balance": "77.00", "user_id": 11}
+    assert result.data == {"id": 3, "balance": "77.00", "user_id": 11}
+    assert result.cache_hit is False
     assert db.calls == 1
 
 
@@ -139,9 +143,10 @@ def test_redis_get_error_falls_back_to_db(monkeypatch):
     wallet = DummyWallet(wallet_id=4, balance="12.00", user_id=99)
     db = DummyDB(wallet_obj=wallet)
 
-    data = wallets_service.get_wallet_cached(db, 4)
+    result = wallets_service.get_wallet_cached(db, 4)
 
-    assert data == {"id": 4, "balance": "12.00", "user_id": 99}
+    assert result.data == {"id": 4, "balance": "12.00", "user_id": 99}
+    assert result.cache_hit is False
     assert db.calls == 1
 
 
@@ -157,9 +162,10 @@ def test_redis_set_error_still_returns_db_data(monkeypatch):
     wallet = DummyWallet(wallet_id=5, balance="999.99", user_id=1)
     db = DummyDB(wallet_obj=wallet)
 
-    data = wallets_service.get_wallet_cached(db, 5)
+    result = wallets_service.get_wallet_cached(db, 5)
 
-    assert data == {"id": 5, "balance": "999.99", "user_id": 1}
+    assert result.data == {"id": 5, "balance": "999.99", "user_id": 1}
+    assert result.cache_hit is False
     assert db.calls == 1
 
 
