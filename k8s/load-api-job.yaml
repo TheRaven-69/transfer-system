@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: transfer-api-load
+  namespace: transfer-system
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: transfer-api-load
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: transfer-api-load
+          image: transfer-system:latest
+          imagePullPolicy: Never
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              python scripts/load_test.py api \
+                --base-url "${LOAD_BASE_URL}" \
+                --requests "${LOAD_REQUESTS}" \
+                --concurrency "${LOAD_CONCURRENCY}" \
+                --users "${LOAD_USERS}" \
+                --seed-concurrency "${LOAD_SEED_CONCURRENCY}" \
+                --amount "${LOAD_AMOUNT}" \
+                --timeout "${LOAD_TIMEOUT}" \
+                --rps "${LOAD_RPS}"
+          env:
+            - name: LOAD_BASE_URL
+              value: http://transfer-nginx
+            - name: LOAD_REQUESTS
+              value: "1500"
+            - name: LOAD_CONCURRENCY
+              value: "50"
+            - name: LOAD_USERS
+              value: "40"
+            - name: LOAD_SEED_CONCURRENCY
+              value: "10"
+            - name: LOAD_AMOUNT
+              value: "0.01"
+            - name: LOAD_TIMEOUT
+              value: "20"
+            - name: LOAD_RPS
+              value: "20"

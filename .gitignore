@@ -144,7 +144,7 @@ ENV/
 env.bak/
 venv.bak/
 !.env.test
-!.env.docker
+.env.docker
 
 # Spyder project settings
 .spyderproject
