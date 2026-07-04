@@ -144,7 +144,7 @@ ENV/
 env.bak/
 venv.bak/
 !.env.test
-!.env.docker
+.env.docker
 
 # Spyder project settings
 .spyderproject
@@ -211,3 +211,5 @@ __marimo__/
 app.db
 .idea
 .env.docker
+k8s/secrets.yaml
+
