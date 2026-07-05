@@ -25,11 +25,22 @@ def _sentry_user_from_request_state(request: Request) -> dict[str, str] | None:
     return {"id": str(user_id)}
 
 
-class RequestContextMiddleware(BaseHTTPMiddleware):
+class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
 
         token = request_id_ctx.set(request_id)
+        try:
+            response = await call_next(request)
+            response.headers["X-Request-ID"] = request_id
+            return response
+        finally:
+            request_id_ctx.reset(token)
+
+
+class SentryMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = request_id_ctx.get("-")
         sentry_sdk.set_tag("component", "api")
         sentry_sdk.set_context(
             "request",
@@ -44,12 +55,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if user_context is not None:
             sentry_sdk.set_user(user_context)
 
-        try:
-            response = await call_next(request)
-            response.headers["X-Request-ID"] = request_id
-            return response
-        finally:
-            request_id_ctx.reset(token)
+        return await call_next(request)
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):

@@ -42,6 +42,8 @@ def before_send(event, hint):
 
 
 def before_send_transaction(event, hint):
+    # Redis span descriptions include command arguments in a generic
+    # "description" field, so key-based masking will not catch raw keys/values.
     cleaned = _mask_sensitive_data(event)
 
     for span in cleaned.get("spans", []):

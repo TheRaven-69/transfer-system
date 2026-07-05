@@ -12,7 +12,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.api.routes import router
 from app.core.logging import setup_logging
 from app.core.metrics import HTTP_EXCEPTIONS_TOTAL
-from app.core.middleware import MetricsMiddleware, RequestContextMiddleware
+from app.core.middleware import MetricsMiddleware, RequestIDMiddleware, SentryMiddleware
 from app.core.request_context import request_id_ctx
 from app.core.sentry import init_sentry
 from app.db.models import Base
@@ -40,7 +40,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Transfer System API", lifespan=lifespan)
 app.add_middleware(MetricsMiddleware)
-app.add_middleware(RequestContextMiddleware)
+app.add_middleware(SentryMiddleware)
+app.add_middleware(RequestIDMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

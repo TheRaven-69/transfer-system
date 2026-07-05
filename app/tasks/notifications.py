@@ -26,7 +26,7 @@ def send_transaction_notification(
     if settings.NOTIFY_DELAY_SEC > 0:
         time.sleep(settings.NOTIFY_DELAY_SEC)
 
-    if random.random() < settings.NOTIFY_FAIL_RATE:
+    if random.random() < settings.NOTIFY_FAIL_RATE:  # nosec B311
         raise Exception("Simulated notification failure")
 
     logger.info(

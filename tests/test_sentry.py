@@ -9,7 +9,7 @@ from app.core import celery_app, middleware
 from app.core.middleware import _sentry_user_from_request_state
 from app.core.request_context import request_id_ctx
 from app.core.settings import SentrySettings
-from app.idempotency import idempotency_key_fingerprint
+from app.idempotency import IdempotencyManager, idempotency_key_fingerprint
 
 
 def test_before_send_masks_sensitive_values():
@@ -262,6 +262,73 @@ def test_transfer_propagates_business_context_to_celery(
     ]
 
 
+def test_idempotency_fingerprint_flows_from_api_to_celery_sentry_context(
+    client,
+    seeded_wallets,
+    monkeypatch,
+    fake_redis,
+):
+    raw_key = "raw-client-idempotency-key"
+    expected_fingerprint = idempotency_key_fingerprint(raw_key)
+    task_calls = []
+
+    monkeypatch.setattr(
+        transfers_service,
+        "get_idempotency_manager",
+        lambda: IdempotencyManager(fake_redis),
+    )
+    monkeypatch.setattr(
+        transfers_service.send_transaction_notification,
+        "delay",
+        lambda *args: task_calls.append(args),
+    )
+
+    from_wallet, to_wallet = seeded_wallets
+    response = client.post(
+        "/transfers",
+        params={
+            "from_wallet_id": from_wallet.id,
+            "to_wallet_id": to_wallet.id,
+            "amount": "10.00",
+        },
+        headers={"Idempotency-Key": raw_key},
+    )
+
+    assert response.status_code == 200
+    assert len(task_calls) == 1
+    transfer_id, request_id, user_id, idempotency_fingerprint = task_calls[0]
+    assert transfer_id == response.json()["id"]
+    assert request_id
+    assert user_id == from_wallet.user_id
+    assert idempotency_fingerprint == expected_fingerprint
+    assert raw_key not in str(task_calls)
+
+    contexts = {}
+
+    def task_run(
+        transfer_id,
+        request_id=None,
+        user_id=None,
+        idempotency_fingerprint=None,
+    ):
+        return None
+
+    task = SimpleNamespace(
+        name="app.tasks.notifications.send_transaction_notification",
+        request=SimpleNamespace(id="task-1", retries=0),
+        run=task_run,
+    )
+    monkeypatch.setattr(sentry.sentry_sdk, "set_context", contexts.__setitem__)
+    monkeypatch.setattr(sentry.sentry_sdk, "set_user", lambda *_args: None)
+
+    celery_app.set_sentry_task_context(task, "task-1", task_calls[0], {})
+
+    assert contexts["idempotency"] == {
+        "key_fingerprint": expected_fingerprint,
+    }
+    assert raw_key not in str(contexts)
+
+
 def test_celery_signal_sets_full_business_context(monkeypatch):
     contexts = {}
     tags = {}
@@ -311,6 +378,37 @@ def test_celery_signal_sets_full_business_context(monkeypatch):
             "idempotency_fingerprint": "fingerprint-1",
         }
     ]
+
+
+def test_celery_signals_clear_request_context_by_task_id(monkeypatch):
+    def task_run(transfer_id, request_id=None):
+        return None
+
+    task = SimpleNamespace(
+        name="app.tasks.notifications.send_transaction_notification",
+        request=SimpleNamespace(id="task-1", retries=0),
+        run=task_run,
+    )
+    monkeypatch.setattr(celery_app, "set_sentry_task_context", lambda *args: None)
+
+    base_token = request_id_ctx.set("outer-request")
+    try:
+        celery_app.task_prerun_handler(
+            task_id="task-1",
+            task=task,
+            args=(42, "celery-request"),
+            kwargs={},
+        )
+
+        assert request_id_ctx.get() == "celery-request"
+
+        celery_app.task_postrun_handler(task_id="task-1")
+
+        assert request_id_ctx.get() == "outer-request"
+    finally:
+        if "task-1" in celery_app._request_id_ctx_tokens:
+            celery_app.task_postrun_handler(task_id="task-1")
+        request_id_ctx.reset(base_token)
 
 
 def test_celery_task_is_free_of_sentry(monkeypatch):
