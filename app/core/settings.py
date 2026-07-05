@@ -94,4 +94,4 @@ class Settings(BaseSettings):
     sentry: SentrySettings = Field(default_factory=SentrySettings)
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

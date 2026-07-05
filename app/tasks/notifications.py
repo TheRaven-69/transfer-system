@@ -1,11 +1,12 @@
 import logging
-import random
+import secrets
 import time
 
 from app.core.celery_app import celery_app
 from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
+random = secrets.SystemRandom()
 
 
 @celery_app.task(
