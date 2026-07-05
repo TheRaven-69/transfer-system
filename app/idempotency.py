@@ -89,3 +89,7 @@ def hash_payload(data: dict) -> str:
     """Stable JSON hashing of a dictionary."""
     serialized = json.dumps(data, sort_keys=True)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def idempotency_key_fingerprint(idempotency_key: str) -> str:
+    return hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:16]

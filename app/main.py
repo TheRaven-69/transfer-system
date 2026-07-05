@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -11,7 +12,8 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.api.routes import router
 from app.core.logging import setup_logging
 from app.core.metrics import HTTP_EXCEPTIONS_TOTAL
-from app.core.middleware import MetricsMiddleware, RequestIDMiddleware
+from app.core.middleware import MetricsMiddleware, RequestIDMiddleware, SentryMiddleware
+from app.core.request_context import request_id_ctx
 from app.core.sentry import init_sentry
 from app.db.models import Base
 from app.db.session import engine
@@ -37,8 +39,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Transfer System API", lifespan=lifespan)
-app.add_middleware(RequestIDMiddleware)
 app.add_middleware(MetricsMiddleware)
+app.add_middleware(SentryMiddleware)
+app.add_middleware(RequestIDMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -78,12 +81,24 @@ def _service_error_status(exc: ServiceError) -> int:
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    request_id = request_id_ctx.get("-")
+
+    sentry_sdk.capture_exception(exc)
+
     logger.exception(
-        "Unhandled exception occurred: path=%s method=%s",
+        "Unhandled exception occurred: request_id=%s path=%s method=%s",
+        request_id,
         _request_path(request),
         request.method,
     )
-    return _error_response(request, 500, exc, detail="Internal server error")
+    _track_exception(request, 500, exc)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "request_id": request_id,
+        },
+    )
 
 
 @app.exception_handler(RequestValidationError)
