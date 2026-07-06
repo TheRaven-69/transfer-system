@@ -77,8 +77,7 @@ def test_cache_hit_returns_cached_and_skips_db(monkeypatch):
 
     result = wallets_service.get_wallet_cached(db, 1)
 
-    assert result.data == cached
-    assert result.cache_hit is True
+    assert result == cached
     assert db.calls == 0
     assert r.get_calls == ["wallet:1"]
 
@@ -97,8 +96,7 @@ def test_cache_miss_fetches_db_and_sets_cache(monkeypatch):
 
     result = wallets_service.get_wallet_cached(db, 2)
 
-    data = result.data
-    assert result.cache_hit is False
+    data = result
     assert data["id"] == 2
     assert data["balance"] == "100.00"
     assert data["user_id"] == 10
@@ -126,8 +124,7 @@ def test_redis_unavailable_falls_back_to_db(monkeypatch):
 
     result = wallets_service.get_wallet_cached(db, 3)
 
-    assert result.data == {"id": 3, "balance": "77.00", "user_id": 11}
-    assert result.cache_hit is False
+    assert result == {"id": 3, "balance": "77.00", "user_id": 11}
     assert db.calls == 1
 
 
@@ -145,8 +142,7 @@ def test_redis_get_error_falls_back_to_db(monkeypatch):
 
     result = wallets_service.get_wallet_cached(db, 4)
 
-    assert result.data == {"id": 4, "balance": "12.00", "user_id": 99}
-    assert result.cache_hit is False
+    assert result == {"id": 4, "balance": "12.00", "user_id": 99}
     assert db.calls == 1
 
 
@@ -164,8 +160,7 @@ def test_redis_set_error_still_returns_db_data(monkeypatch):
 
     result = wallets_service.get_wallet_cached(db, 5)
 
-    assert result.data == {"id": 5, "balance": "999.99", "user_id": 1}
-    assert result.cache_hit is False
+    assert result == {"id": 5, "balance": "999.99", "user_id": 1}
     assert db.calls == 1
 
 

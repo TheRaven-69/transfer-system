@@ -1,6 +1,4 @@
 from prometheus_client import Counter, Gauge, Histogram
-from sqlalchemy import func, select
-from sqlalchemy.exc import SQLAlchemyError
 
 HTTP_REQUESTS_TOTAL = Counter(
     "http_requests_total", "Total number of HTTP requests", ["method", "path", "status"]
@@ -32,16 +30,6 @@ TRANSFERS_CREATED_TOTAL = Counter(
 TRANSFER_AMOUNT_TOTAL = Counter(
     "transfer_amount_total",
     "Total monetary amount of successfully created transfers",
-)
-
-WALLET_CACHE_HITS_TOTAL = Counter(
-    "wallet_cache_hits_total",
-    "Total number of wallet cache hits",
-)
-
-WALLET_CACHE_MISSES_TOTAL = Counter(
-    "wallet_cache_misses_total",
-    "Total number of wallet cache misses",
 )
 
 WALLET_COUNT = Gauge(
@@ -85,29 +73,3 @@ DB_QUERY_ERRORS_TOTAL = Counter(
     "Total number of database query errors",
     ["operation"],
 )
-
-
-def refresh_system_metrics() -> None:
-    from app.db.models import Transaction, User, Wallet
-    from app.db.session import SessionLocal
-
-    try:
-        with SessionLocal() as db:
-            wallet_count = db.execute(select(func.count(Wallet.id))).scalar_one()
-            user_count = db.execute(select(func.count(User.id))).scalar_one()
-            transaction_count = db.execute(
-                select(func.count(Transaction.id))
-            ).scalar_one()
-            total_balance = db.execute(
-                select(func.coalesce(func.sum(Wallet.balance), 0))
-            ).scalar_one()
-    except SQLAlchemyError:
-        SYSTEM_METRICS_COLLECTION_ERRORS_TOTAL.inc()
-        METRICS_COLLECTION_SUCCESS.set(0)
-        return
-
-    WALLET_COUNT.set(wallet_count)
-    USER_COUNT.set(user_count)
-    TRANSACTION_COUNT.set(transaction_count)
-    LEDGER_BALANCE_TOTAL.set(float(total_balance))
-    METRICS_COLLECTION_SUCCESS.set(1)

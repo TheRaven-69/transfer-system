@@ -1,10 +1,38 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version.
-    rev: v0.9.7
+  - repo: local
     hooks:
-      # Run the linter.
-      - id: ruff
-        args: [ --fix ]
-      # Run the formatter.
-      - id: ruff-format
+      - id: ruff-check
+        name: Ruff lint
+        entry: ruff check .
+        language: system
+        pass_filenames: false
+
+      - id: ruff-format-check
+        name: Ruff format check
+        entry: ruff format --check .
+        language: system
+        pass_filenames: false
+
+      - id: mypy
+        name: MyPy
+        entry: mypy app
+        language: system
+        pass_filenames: false
+
+      - id: pytest
+        name: Pytest
+        entry: python -m pytest -q
+        language: system
+        pass_filenames: false
+
+      - id: bandit
+        name: Bandit
+        entry: bandit -r app
+        language: system
+        pass_filenames: false
+
+      - id: docker-build
+        name: Docker build
+        entry: docker build -t transfer-system:ci .
+        language: system
+        pass_filenames: false

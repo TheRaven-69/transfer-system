@@ -1,7 +1,6 @@
 from decimal import Decimal
 
 import app.api.wallets as wallets_router
-from app.services.wallets import WalletCacheResult
 
 
 class DummyWallet:
@@ -13,10 +12,7 @@ class DummyWallet:
 
 def test_get_wallet_by_id_returns_wallet(client, monkeypatch):
     def fake_get_wallet_cached(db, wallet_id: int):
-        return WalletCacheResult(
-            data={"id": wallet_id, "user_id": 99, "balance": "123.45"},
-            cache_hit=True,
-        )
+        return {"id": wallet_id, "user_id": 99, "balance": "123.45"}
 
     monkeypatch.setattr(wallets_router, "get_wallet_cached", fake_get_wallet_cached)
 

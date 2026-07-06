@@ -4,7 +4,7 @@ import uuid
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from app.core.metrics import (
+from app.core.metrics.collectors import (
     HTTP_REQUEST_DURATION_SECONDS,
     HTTP_REQUEST_OUTCOMES_TOTAL,
     HTTP_REQUESTS_TOTAL,

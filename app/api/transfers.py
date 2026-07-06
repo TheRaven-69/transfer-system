@@ -3,7 +3,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 
-from app.core.metrics import TRANSFER_AMOUNT_TOTAL, TRANSFERS_CREATED_TOTAL
+from app.core.metrics.collectors import TRANSFER_AMOUNT_TOTAL, TRANSFERS_CREATED_TOTAL
 from app.db.session import get_db
 from app.services.transfers import create_transfer_idempotent as create_transfer
 
