@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.cache import get_cache
+from app.core.metrics.cache import record_wallet_cache_lookup
 from app.db.models import User, Wallet
 from app.db.tx import on_commit
 
@@ -28,6 +29,7 @@ def get_wallet_cached(db: Session, wallet_id: int) -> dict:
 
     data = cache.get(key)
     if data:
+        record_wallet_cache_lookup(cache_hit=True)
         return data
 
     wallet = _get_wallet_from_db(db, wallet_id)
@@ -38,6 +40,7 @@ def get_wallet_cached(db: Session, wallet_id: int) -> dict:
     }
 
     cache.set(key, data, ex=CACHE_TTL_SECONDS)
+    record_wallet_cache_lookup(cache_hit=False)
     return data
 
 

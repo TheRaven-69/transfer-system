@@ -10,6 +10,31 @@ patterns.
 
 ============================================================
 
+OBSERVABILITY
+
+The Docker Compose environment includes Prometheus, Grafana, Alertmanager,
+PostgreSQL exporter, Redis exporter, and the RabbitMQ Prometheus plugin.
+
+Access:
+
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000
+- Alertmanager: http://localhost:9093
+- RabbitMQ metrics: http://localhost:15692/metrics
+
+Grafana automatically provisions the Prometheus datasource and the
+"Transfer System Overview" dashboard.
+
+The dashboard includes API request rate, 5xx ratio, p95/p99 latency,
+transfers per minute, transfer amount, wallet cache hit ratio, total ledger
+balance, database query latency, RabbitMQ queue load, PostgreSQL
+connections, and Redis memory usage.
+
+Prometheus alert rules monitor API error rate, RabbitMQ queue backlog, API
+p95 latency, database query errors, and system metric collection failures.
+
+============================================================
+
 🚀 CORE FEATURES
 
 -   User creation
@@ -20,7 +45,7 @@ patterns.
 -   Async notifications via Celery
 -   Retry & backoff strategy
 -   Reverse proxy with rate limiting
--   Fully containerized infrastructure (6 services)
+-   Fully containerized runtime infrastructure
 -   CI pipeline with GitHub Actions
 
 ============================================================
@@ -31,7 +56,7 @@ Multi-service Docker environment:
 
 -   App — FastAPI (business logic)
 -   PostgreSQL — primary database
--   Redis — balance cache + idempotency store
+-   Redis — wallet cache + idempotency store
 -   RabbitMQ — message broker
 -   Celery Worker — async task processing
 -   Nginx — reverse proxy + rate limiting
@@ -103,7 +128,7 @@ Consistent balances
 
 Wallet Read Optimization:
 
-GET /wallet/{id}:
+GET /wallets/{id}:
 
 1.  Check Redis
 2.  If miss → fetch from DB
@@ -148,9 +173,13 @@ Configured with:
 
 🐳 DOCKER INFRASTRUCTURE
 
-Services:
+Core runtime services:
 
 app db redis rabbitmq worker nginx
+
+Observability services:
+
+prometheus grafana alertmanager postgres-exporter redis-exporter
 
 ------------------------------------------------------------------------
 

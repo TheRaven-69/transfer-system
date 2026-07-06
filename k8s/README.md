@@ -8,10 +8,18 @@
 4. Create local secrets:
    `Copy-Item k8s/secrets.yaml.example k8s/secrets.yaml`
    Update passwords, `DATABASE_URL`, `RABBITMQ_URL`, and `SENTRY_DSN`.
-5. Apply all manifests:
+5. Apply the runtime manifests:
    `kubectl apply -f k8s/namespace.yaml`
    `kubectl apply -f k8s/secrets.yaml`
-   `kubectl apply -f k8s/`
+   `kubectl apply -f k8s/configmap.yaml`
+   `kubectl apply -f k8s/postgres.yaml`
+   `kubectl apply -f k8s/redis.yaml`
+   `kubectl apply -f k8s/rabbitmq.yaml`
+   `kubectl apply -f k8s/app-deployment.yaml`
+   `kubectl apply -f k8s/worker-deployment.yaml`
+   `kubectl apply -f k8s/nginx.yaml`
+   `kubectl apply -f k8s/hpa-app.yaml`
+   `kubectl apply -f k8s/keda-worker-scaledobject.yaml`
 6. Check pods:
    `kubectl get pods -n transfer-system`
 7. If the pods are running, open the API through nginx locally:
@@ -21,7 +29,7 @@
 
 Notes:
 - `imagePullPolicy: Never` means Kubernetes will not download the image from Docker Hub or another registry. The image must already exist inside the cluster runtime.
-- This setup is for local development. Postgres uses `emptyDir`, so data is lost after pod recreation.
+- This setup is for local development. Postgres uses a 1Gi `PersistentVolumeClaim`; delete the claim if you want to reset local cluster data.
 - ConfigMap values are defined in `k8s/configmap.yaml`.
 - Secrets are defined locally in `k8s/secrets.yaml`, which is ignored by Git. Use `k8s/secrets.yaml.example` as a template, then change database, RabbitMQ, and Sentry values before applying manifests.
 

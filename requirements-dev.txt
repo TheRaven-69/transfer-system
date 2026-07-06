@@ -1,4 +1,5 @@
+pre-commit
 ruff
 mypy
 bandit
-pytest 
+pytest
