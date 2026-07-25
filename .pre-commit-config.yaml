@@ -8,3 +8,23 @@ repos:
         args: [ --fix ]
       # Run the formatter.
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy app
+        language: system
+        pass_filenames: false
+
+      - id: bandit
+        name: bandit
+        entry: bandit -r app
+        language: system
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: python -m pytest -q
+        language: system
+        pass_filenames: false

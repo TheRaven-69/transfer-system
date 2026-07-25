@@ -213,4 +213,3 @@ app.db
 .env.docker
 k8s/configmap.yaml
 k8s/secrets.yaml
-
