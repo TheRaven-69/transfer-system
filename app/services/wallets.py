@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -15,6 +16,12 @@ WALLET_CACHE_PREFIX = "wallet:"
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class WalletCacheResult:
+    data: dict
+    cache_hit: bool
+
+
 def _get_wallet_from_db(db: Session, wallet_id: int) -> Wallet:
     wallet = db.get(Wallet, wallet_id)
     if not wallet:
@@ -22,13 +29,13 @@ def _get_wallet_from_db(db: Session, wallet_id: int) -> Wallet:
     return wallet
 
 
-def get_wallet_cached(db: Session, wallet_id: int) -> dict:
+def get_wallet_cached(db: Session, wallet_id: int) -> WalletCacheResult:
     cache = get_cache()
     key = f"{WALLET_CACHE_PREFIX}{wallet_id}"
 
     data = cache.get(key)
     if data:
-        return data
+        return WalletCacheResult(data=data, cache_hit=True)
 
     wallet = _get_wallet_from_db(db, wallet_id)
     data = {
@@ -38,7 +45,7 @@ def get_wallet_cached(db: Session, wallet_id: int) -> dict:
     }
 
     cache.set(key, data, ex=CACHE_TTL_SECONDS)
-    return data
+    return WalletCacheResult(data=data, cache_hit=False)
 
 
 def invalidate_wallet_cache(wallet_id: int) -> None:
