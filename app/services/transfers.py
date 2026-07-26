@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.request_context import request_id_ctx
 from app.db.models import Transaction, Wallet
 from app.db.tx import on_commit, transaction_scope
 from app.idempotency import (

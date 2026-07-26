@@ -12,7 +12,8 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.api.routes import router
 from app.core.logging import setup_logging
 from app.core.metrics import HTTP_EXCEPTIONS_TOTAL, refresh_system_metrics
-from app.core.middleware import MetricsMiddleware, RequestIDMiddleware
+from app.core.middleware import MetricsMiddleware, RequestIDMiddleware, SentryMiddleware
+from app.core.request_context import request_id_ctx
 from app.core.sentry import init_sentry
 from app.db.models import Base
 from app.db.session import engine
