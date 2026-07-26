@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wallets | Transfer System</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+    <main class="page">
+        <header class="topbar">
+            <a href="/" class="brand">Transfer System</a>
+            <nav class="nav-links">
+                <a href="/" class="button button-secondary">Home</a>
+                <a href="/ui/users" class="button button-secondary">Users</a>
+                <a href="/ui/wallets" class="button button-primary">Wallets</a>
+                <a href="/ui/transfers" class="button button-secondary">Transfers</a>
+            </nav>
+        </header>
+
+        <section class="page-hero">
+            <article class="hero-card">
+                <span class="eyebrow">Wallets page</span>
+                <h1>Inspect wallet state from a dedicated screen</h1>
+                <p class="hero-copy">
+                    This page is intentionally narrow in scope: type a wallet id, fetch the payload and
+                    inspect the balance coming back from the cached wallet endpoint.
+                </p>
+                <div class="meta-grid">
+                    <article class="route-card">
+                        <code>GET /wallets/{wallet_id}</code>
+                        <p>Returns wallet id, balance and owning user.</p>
+                    </article>
+                    <article class="route-card">
+                        <code>GET /health</code>
+                        <p>Useful for a quick service check before debugging wallet reads.</p>
+                    </article>
+                </div>
+            </article>
+
+            <aside class="status-card">
+                <div class="status-top">
+                    <div>
+                        <span class="pill">Status</span>
+                        <p class="status-copy">Health and latest wallet interaction for this screen.</p>
+                    </div>
+                    <button type="button" class="button-secondary" data-health-refresh>
+                        Refresh health
+                    </button>
+                </div>
+                <section class="status-box">
+                    <div class="status-indicator" data-health-indicator>Checking API</div>
+                    <p class="status-copy" data-health-detail>Running the first health probe now.</p>
+                </section>
+                <section class="meta-box">
+                    <span class="meta-label">Latest action</span>
+                    <p class="meta-value" data-last-action>No requests sent yet.</p>
+                </section>
+                <section class="meta-box">
+                    <span class="meta-label">Wallet focus</span>
+                    <p class="meta-value" data-wallet-hint>Fetch a wallet to pin the current entity here.</p>
+                </section>
+            </aside>
+        </section>
+
+        <section class="workspace">
+            <article class="panel wide">
+                <h2 class="panel-title">Wallets workspace</h2>
+                <p class="panel-copy">A focused single-purpose page for wallet lookup.</p>
+
+                <div class="cards">
+                    <section class="form-card">
+                        <h3>Get wallet</h3>
+                        <p>Reads the wallet endpoint and prints the exact response payload below.</p>
+                        <form data-form="get-wallet">
+                            <div class="field">
+                                <label for="wallet_id">Wallet ID</label>
+                                <input id="wallet_id" name="wallet_id" type="number" min="1" required />
+                            </div>
+                            <button type="submit">Fetch wallet</button>
+                        </form>
+                        <div class="response-preview">
+                            <strong>Latest response</strong>
+                            <pre data-response="get-wallet">No response yet.</pre>
+                        </div>
+                    </section>
+                </div>
+            </article>
+
+            <aside class="panel narrow">
+                <section class="console">
+                    <div class="console-head">
+                        <h3>API console</h3>
+                        <button type="button" class="muted-button" data-clear-console>Clear</button>
+                    </div>
+                    <p class="console-copy">Raw API responses for wallet lookups land here.</p>
+                    <pre data-console-output>Console is ready.
+
+Run a wallet action to inspect the next API response.</pre>
+                </section>
+
+                <section class="timeline">
+                    <h3>Recent actions</h3>
+                    <div class="timeline-list" data-timeline></div>
+                </section>
+            </aside>
+        </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

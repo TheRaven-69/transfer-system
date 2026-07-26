@@ -1,7 +1,7 @@
 import json
 from contextlib import suppress
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from redis import Redis, RedisError
 
@@ -25,6 +25,7 @@ class Cache:
             if not data:
                 return None
 
+            data = cast(str | bytes | bytearray, data)
             if isinstance(data, bytes):
                 data = data.decode("utf-8")
 

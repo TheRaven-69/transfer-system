@@ -14,8 +14,7 @@ def make_settings(**overrides):
         "LOG_LEVEL": "INFO",
         "NOTIFY_FAIL_RATE": "0.0",
         "NOTIFY_DELAY_SEC": "2.0",
-        "SENTRY_DSN": "",
-        "SENTRY_TRACES_SAMPLE_RATE": "0.0",
+        "sentry": {"dsn": "", "traces_sample_rate": "0.0"},
     }
     data.update(overrides)
     return Settings(**data)
@@ -46,6 +45,16 @@ def test_invalid_notify_fail_rate_fails_fast():
         make_settings(NOTIFY_FAIL_RATE="2.0")
 
 
+def test_invalid_notify_delay_fails_fast():
+    with pytest.raises(ValidationError):
+        make_settings(NOTIFY_DELAY_SEC="-0.1")
+
+
+def test_invalid_database_url_fails_fast():
+    with pytest.raises(ValidationError):
+        make_settings(DATABASE_URL="mysql://db/transfer_db")
+
+
 def test_invalid_redis_url_fails_fast():
     with pytest.raises(ValidationError):
         make_settings(REDIS_URL="not-a-url")
@@ -63,13 +72,24 @@ def test_invalid_rabbitmq_url_fails_fast():
 
 def test_invalid_sentry_dsn_fails_fast():
     with pytest.raises(ValidationError):
-        make_settings(SENTRY_DSN="banana")
+        make_settings(sentry={"dsn": "banana"})
+
+
+def test_non_http_sentry_dsn_fails_fast():
+    with pytest.raises(ValidationError):
+        make_settings(sentry={"dsn": "ftp://example.com/project"})
+
+
+@pytest.mark.parametrize("field", ["traces_sample_rate", "profiles_sample_rate"])
+def test_invalid_sentry_sample_rate_fails_fast(field):
+    with pytest.raises(ValidationError):
+        make_settings(sentry={field: 1.1})
 
 
 def test_empty_sentry_dsn_becomes_none():
-    settings = make_settings(SENTRY_DSN="")
+    settings = make_settings(sentry={"dsn": ""})
 
-    assert settings.SENTRY_DSN is None
+    assert settings.sentry.dsn is None
 
 
 def test_sqlite_database_url_allowed_for_tests():

@@ -17,13 +17,13 @@ def transfer(
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ):
-    transfer_between_wallets = create_transfer(
+    transfer = create_transfer(
         db, from_wallet_id, to_wallet_id, amount, idempotency_key
     )
     return {
-        "id": transfer_between_wallets.id,
-        "from_wallet_id": transfer_between_wallets.from_wallet_id,
-        "to_wallet_id": transfer_between_wallets.to_wallet_id,
-        "amount": transfer_between_wallets.amount,
-        "created_at": transfer_between_wallets.created_at,
+        "id": transfer.id,
+        "from_wallet_id": transfer.from_wallet_id,
+        "to_wallet_id": transfer.to_wallet_id,
+        "amount": transfer.amount,
+        "created_at": transfer.created_at,
     }

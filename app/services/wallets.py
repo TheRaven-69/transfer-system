@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -10,6 +11,8 @@ from .exceptions import UserNotFound, WalletNotFound
 
 CACHE_TTL_SECONDS = 60
 WALLET_CACHE_PREFIX = "wallet:"
+
+logger = logging.getLogger(__name__)
 
 
 def _get_wallet_from_db(db: Session, wallet_id: int) -> Wallet:
@@ -54,6 +57,13 @@ def create_wallet_for_user(db: Session, user_id: int) -> Wallet:
 
     wallet = Wallet(user_id=user.id, balance=initial_balance)
     db.add(wallet)
+    db.flush()
 
     on_commit(db, invalidate_wallet_cache, wallet.id)
+    logger.info(
+        "Wallet created successfully: wallet_id=%s user_id=%s balance=%s",
+        wallet.id,
+        user_id,
+        wallet.balance,
+    )
     return wallet

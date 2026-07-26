@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: transfer-worker-load
+  namespace: transfer-system
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: transfer-worker-load
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: transfer-worker-load
+          image: transfer-system:latest
+          imagePullPolicy: Never
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              python scripts/load_test.py task-only \
+                --requests "${LOAD_REQUESTS}" \
+                --concurrency "${LOAD_CONCURRENCY}" \
+                --rabbitmq-url "${RABBITMQ_URL}" \
+                --redis-url "${REDIS_URL}"
+          env:
+            - name: LOAD_REQUESTS
+              value: "3000"
+            - name: LOAD_CONCURRENCY
+              value: "100"
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: transfer-system-secrets
+                  key: RABBITMQ_URL
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: transfer-system-secrets
+                  key: DATABASE_URL
