@@ -1,5 +1,5 @@
+pre-commit
 ruff
 mypy
 bandit
 pytest
-pre-commit
