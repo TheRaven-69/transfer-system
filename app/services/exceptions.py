@@ -1,7 +1,7 @@
 class ServiceError(Exception):
     """Base class for exceptions in this service."""
 
-    message: str
+    message = "Service error"
 
     def __str__(self) -> str:
         return self.message

@@ -21,7 +21,8 @@
 
 Notes:
 - `imagePullPolicy: Never` means Kubernetes will not download the image from Docker Hub or another registry. The image must already exist inside the cluster runtime.
-- This setup is for local development. Postgres uses `emptyDir`, so data is lost after pod recreation.
+- This setup is for local development. Postgres data is stored in the
+  `postgres-data` PersistentVolumeClaim.
 - ConfigMap values are defined in `k8s/configmap.yaml`.
 - Secrets are defined locally in `k8s/secrets.yaml`, which is ignored by Git. Use `k8s/secrets.yaml.example` as a template, then change database, RabbitMQ, and Sentry values before applying manifests.
 

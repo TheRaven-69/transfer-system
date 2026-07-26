@@ -2,7 +2,7 @@ import json
 import os
 from typing import Annotated, Literal
 
-from pydantic import AnyUrl, Field, field_validator
+from pydantic import AnyHttpUrl, Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 Environment = Literal["local", "dev", "test", "staging", "production"]
@@ -32,7 +32,7 @@ class SentrySettings(BaseSettings):
         case_sensitive=False,
     )
 
-    dsn: AnyUrl | None = None
+    dsn: AnyHttpUrl | None = None
     environment: Environment | None = None
     release: str | None = None
     traces_sample_rate: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -86,10 +86,50 @@ class Settings(BaseSettings):
     RABBITMQ_URL: str
 
     CACHE_ENABLED: bool = False
-    LOG_LEVEL: str = "INFO"
+    LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
     NOTIFY_FAIL_RATE: float = Field(default=0.0, ge=0.0, le=1.0)
     NOTIFY_DELAY_SEC: float = Field(default=2.0, ge=0.0)
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def validate_database_url(cls, value: str) -> str:
+        allowed_prefixes = (
+            "postgresql://",
+            "postgresql+psycopg://",
+            "sqlite://",
+            "sqlite+pysqlite://",
+        )
+
+        if not value.startswith(allowed_prefixes):
+            raise ValueError(
+                "DATABASE_URL must start with postgresql://, postgresql+psycopg://, "
+                "sqlite:// or sqlite+pysqlite://"
+            )
+
+        return value
+
+    @field_validator("REDIS_URL")
+    @classmethod
+    def validate_redis_url(cls, value: str) -> str:
+        allowed_prefixes = ("redis://", "rediss://")
+
+        if not value.startswith(allowed_prefixes):
+            raise ValueError("REDIS_URL must start with redis:// or rediss://")
+
+        return value
+
+    @field_validator("RABBITMQ_URL")
+    @classmethod
+    def validate_rabbitmq_url(cls, value: str) -> str:
+        allowed_prefixes = ("amqp://", "amqps://", "memory://")
+
+        if not value.startswith(allowed_prefixes):
+            raise ValueError(
+                "RABBITMQ_URL must start with amqp://, amqps:// or memory://"
+            )
+
+        return value
 
     sentry: SentrySettings = Field(default_factory=SentrySettings)
 
