@@ -3,8 +3,8 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import app.core.sentry as sentry
-import app.services.transfers as transfers_service
 import app.tasks.notifications as notifications
+import app.usecases.transfers as transfers_usecase
 from app.core import celery_app, middleware
 from app.core.middleware import _sentry_user_from_request_state
 from app.core.request_context import request_id_ctx
@@ -208,13 +208,18 @@ def test_idempotent_transfer_passes_fingerprint_to_transfer(monkeypatch):
         return object()
 
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(),
     )
-    monkeypatch.setattr(transfers_service, "create_transfer", fake_create_transfer)
+    monkeypatch.setattr(transfers_usecase, "create_transfer", fake_create_transfer)
+    monkeypatch.setattr(
+        transfers_usecase,
+        "_post_transfer_side_effects",
+        lambda *args: captured.update({"side_effects": args}),
+    )
 
-    transfers_service.create_transfer_idempotent(
+    transfers_usecase.create_transfer_idempotent(
         object(),
         1,
         2,
@@ -222,15 +227,14 @@ def test_idempotent_transfer_passes_fingerprint_to_transfer(monkeypatch):
         "raw-secret-key",
     )
 
-    assert captured["idempotency_fingerprint"] == idempotency_key_fingerprint(
-        "raw-secret-key"
-    )
+    assert captured["side_effects"][2] == idempotency_key_fingerprint("raw-secret-key")
 
 
 def test_transfer_propagates_business_context_to_celery(
     db,
     seeded_wallets,
     monkeypatch,
+    fake_redis,
 ):
     from_wallet, to_wallet = seeded_wallets
     from_wallet_id = from_wallet.id
@@ -240,25 +244,30 @@ def test_transfer_propagates_business_context_to_celery(
 
     task_calls = []
     monkeypatch.setattr(
-        transfers_service.send_transaction_notification,
-        "delay",
+        transfers_usecase,
+        "get_idempotency_manager",
+        lambda: IdempotencyManager(fake_redis),
+    )
+    monkeypatch.setattr(
+        transfers_usecase,
+        "enqueue_transfer_notification",
         lambda *args: task_calls.append(args),
     )
 
     token = request_id_ctx.set("request-1")
     try:
-        transfer = transfers_service.create_transfer(
+        transfer = transfers_usecase.create_transfer_idempotent(
             db,
             from_wallet_id,
             to_wallet_id,
             Decimal("10.00"),
-            idempotency_fingerprint="fingerprint-1",
+            "raw-secret-key",
         )
     finally:
         request_id_ctx.reset(token)
 
     assert task_calls == [
-        (transfer.id, "request-1", user_id, "fingerprint-1"),
+        (transfer.id, user_id, idempotency_key_fingerprint("raw-secret-key"))
     ]
 
 
@@ -273,13 +282,13 @@ def test_idempotency_fingerprint_flows_from_api_to_celery_sentry_context(
     task_calls = []
 
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
     monkeypatch.setattr(
-        transfers_service.send_transaction_notification,
-        "delay",
+        transfers_usecase,
+        "enqueue_transfer_notification",
         lambda *args: task_calls.append(args),
     )
 
@@ -296,12 +305,12 @@ def test_idempotency_fingerprint_flows_from_api_to_celery_sentry_context(
 
     assert response.status_code == 200
     assert len(task_calls) == 1
-    transfer_id, request_id, user_id, idempotency_fingerprint = task_calls[0]
+    transfer_id, user_id, idempotency_fingerprint = task_calls[0]
     assert transfer_id == response.json()["id"]
-    assert request_id
     assert user_id == from_wallet.user_id
     assert idempotency_fingerprint == expected_fingerprint
     assert raw_key not in str(task_calls)
+    request_id = response.headers["X-Request-ID"]
 
     contexts = {}
 
@@ -321,7 +330,12 @@ def test_idempotency_fingerprint_flows_from_api_to_celery_sentry_context(
     monkeypatch.setattr(sentry.sentry_sdk, "set_context", contexts.__setitem__)
     monkeypatch.setattr(sentry.sentry_sdk, "set_user", lambda *_args: None)
 
-    celery_app.set_sentry_task_context(task, "task-1", task_calls[0], {})
+    celery_app.set_sentry_task_context(
+        task,
+        "task-1",
+        (transfer_id, request_id, user_id, idempotency_fingerprint),
+        {},
+    )
 
     assert contexts["idempotency"] == {
         "key_fingerprint": expected_fingerprint,

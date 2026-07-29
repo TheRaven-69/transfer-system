@@ -4,16 +4,8 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.request_context import request_id_ctx
 from app.db.models import Transaction, Wallet
-from app.db.tx import on_commit, transaction_scope
-from app.idempotency import (
-    get_idempotency_manager,
-    hash_payload,
-    idempotency_key_fingerprint,
-)
-from app.services.wallets import invalidate_wallet_cache
-from app.tasks.notifications import send_transaction_notification
+from app.db.tx import transaction_scope
 
 from .exceptions import (
     CannotTransferToSameWallet,
@@ -31,7 +23,6 @@ def create_transfer(
     from_wallet_id: int,
     to_wallet_id: int,
     amount: Decimal,
-    idempotency_fingerprint: str | None = None,
 ) -> Transaction:
     if from_wallet_id == to_wallet_id:
         raise CannotTransferToSameWallet()
@@ -79,17 +70,6 @@ def create_transfer(
         db.add(transfer)
         db.flush()
 
-        on_commit(db, invalidate_wallet_cache, from_wallet_id)
-        on_commit(db, invalidate_wallet_cache, to_wallet_id)
-        on_commit(
-            db,
-            send_transaction_notification.delay,
-            transfer.id,
-            request_id_ctx.get(),
-            from_wallet.user_id,
-            idempotency_fingerprint,
-        )
-
     logger.info(
         "Transfer completed successfully: transfer_id=%s from_wallet_id=%s to_wallet_id=%s amount=%s",
         transfer.id,
@@ -98,30 +78,3 @@ def create_transfer(
         amount,
     )
     return transfer
-
-
-def create_transfer_idempotent(
-    db: Session,
-    from_wallet_id: int,
-    to_wallet_id: int,
-    amount: Decimal,
-    idempotency_key: str,
-) -> Transaction:
-    idem = get_idempotency_manager()
-    fingerprint = idempotency_key_fingerprint(idempotency_key)
-
-    payload = {
-        "from_wallet_id": from_wallet_id,
-        "to_wallet_id": to_wallet_id,
-        "amount": str(amount),
-    }
-    request_hash = hash_payload(payload)
-
-    with idem.reserve(f"transfer:{idempotency_key}", request_hash):
-        return create_transfer(
-            db,
-            from_wallet_id,
-            to_wallet_id,
-            amount,
-            idempotency_fingerprint=fingerprint,
-        )

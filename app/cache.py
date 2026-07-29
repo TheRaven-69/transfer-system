@@ -5,6 +5,7 @@ from typing import Any, Optional, cast
 
 from redis import Redis, RedisError
 
+from app.core.metrics.cache import record_wallet_cache_lookup
 from app.core.settings import settings
 
 
@@ -35,6 +36,11 @@ class Cache:
             return json.loads(data) if json_decode else data
         except (RedisError, json.JSONDecodeError, TypeError):
             return None
+
+    def get_wallet(self, key: str) -> Optional[Any]:
+        data = self.get(key)
+        record_wallet_cache_lookup(cache_hit=data is not None)
+        return data
 
     def set(
         self,

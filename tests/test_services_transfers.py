@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from redis import RedisError
 
-import app.services.transfers as transfers_service
+import app.usecases.transfers as transfers_usecase
 from app.db.models import Transaction, User, Wallet
 from app.idempotency import IdempotencyManager, hash_payload
 from app.services.exceptions import (
@@ -13,7 +13,8 @@ from app.services.exceptions import (
     NotFound,
     RequestInProgress,
 )
-from app.services.transfers import create_transfer, create_transfer_idempotent
+from app.services.transfers import create_transfer
+from app.usecases.transfers import create_transfer_idempotent
 
 
 def _mk_user_and_wallet(db, balance: Decimal) -> Wallet:
@@ -107,7 +108,7 @@ def test_idempotent_transfer_redis_same_key_raises_in_progress_without_double_de
     monkeypatch, db, fake_redis
 ):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
@@ -131,7 +132,7 @@ def test_idempotent_transfer_redis_same_key_raises_in_progress_without_double_de
 
 def test_idempotent_transfer_redis_writes_request_hash(monkeypatch, db, fake_redis):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
@@ -150,7 +151,7 @@ def test_idempotent_transfer_redis_writes_request_hash(monkeypatch, db, fake_red
 
 def test_idempotent_transfer_redis_conflict_by_payload(monkeypatch, db, fake_redis):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
@@ -168,7 +169,7 @@ def test_idempotent_transfer_existing_same_hash_raises_in_progress(
     monkeypatch, db, fake_redis
 ):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
@@ -182,7 +183,7 @@ def test_idempotent_transfer_existing_same_hash_raises_in_progress(
     )
 
     monkeypatch.setattr(
-        "app.services.transfers.hash_payload",
+        "app.usecases.transfers.hash_payload",
         lambda *_args, **_kwargs: "same-hash",
     )
 
@@ -195,7 +196,7 @@ def test_idempotent_transfer_existing_same_hash_raises_in_progress(
 def test_idempotent_transfer_without_redis_raises_in_progress(monkeypatch, db):
     # Null Object pattern case
     monkeypatch.setattr(
-        transfers_service, "get_idempotency_manager", lambda: IdempotencyManager(None)
+        transfers_usecase, "get_idempotency_manager", lambda: IdempotencyManager(None)
     )
 
     from_w = _mk_user_and_wallet(db, Decimal("100.00"))
@@ -217,7 +218,7 @@ def test_idempotent_transfer_redis_error_raises_in_progress(monkeypatch, db):
             raise RedisError("error")
 
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(FailingRedis()),
     )
@@ -235,7 +236,7 @@ def test_idempotent_transfer_error_cleanup_deletes_processing_key(
     monkeypatch, db, fake_redis
 ):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
@@ -246,7 +247,7 @@ def test_idempotent_transfer_error_cleanup_deletes_processing_key(
     def boom(*_args, **_kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(transfers_service, "create_transfer", boom)
+    monkeypatch.setattr(transfers_usecase, "create_transfer", boom)
 
     with pytest.raises(RuntimeError):
         create_transfer_idempotent(db, from_w.id, to_w.id, Decimal("5.00"), "cleanup-1")

@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 
-import app.services.transfers as transfers_service
+import app.usecases.transfers as transfers_usecase
 from app.db.models import Transaction, Wallet
 from app.idempotency import IdempotencyManager
 
@@ -11,7 +11,7 @@ def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(
     client, db, seeded_wallets, monkeypatch, fake_redis
 ):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
@@ -47,7 +47,7 @@ def test_idempotency_same_key_different_payload_conflict(
     client, seeded_wallets, monkeypatch, fake_redis
 ):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
