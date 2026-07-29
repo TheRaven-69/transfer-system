@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.services.wallets import get_wallet_cached
+from app.usecases.wallets import get_wallet_cached
 
 router = APIRouter(prefix="/wallets", tags=["wallets"])
 

@@ -11,6 +11,17 @@ engine = create_engine(settings.DATABASE_URL, **engine_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def _query_operation(statement: str) -> str:
+    parts = statement.lstrip().split(maxsplit=1)
+    if not parts:
+        return "other"
+
+    operation = parts[0].lower()
+    if operation in {"select", "insert", "update", "delete"}:
+        return operation
+    return "other"
+
+
 def get_db():
     db = SessionLocal()
     try:

@@ -1,9 +1,11 @@
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
+from kombu.exceptions import OperationalError  # type: ignore[import-untyped]
 from redis import RedisError
 
-import app.services.transfers as transfers_service
+import app.usecases.transfers as transfers_usecase
 from app.db.models import Transaction, User, Wallet
 from app.idempotency import IdempotencyManager, hash_payload
 from app.services.exceptions import (
@@ -13,7 +15,58 @@ from app.services.exceptions import (
     NotFound,
     RequestInProgress,
 )
-from app.services.transfers import create_transfer, create_transfer_idempotent
+from app.services.transfers import create_transfer
+from app.usecases.transfers import create_transfer_idempotent
+
+
+def test_post_transfer_side_effects_logs_broker_error(
+    monkeypatch,
+    caplog,
+):
+    transfer = SimpleNamespace(id=7, from_wallet_id=1, to_wallet_id=2)
+    db = SimpleNamespace(get=lambda *_args: SimpleNamespace(user_id=3))
+
+    monkeypatch.setattr(transfers_usecase, "invalidate_wallet_cache", lambda *_: None)
+
+    def broker_unavailable(*_args):
+        raise OperationalError("broker unavailable")
+
+    monkeypatch.setattr(
+        transfers_usecase,
+        "enqueue_transfer_notification",
+        broker_unavailable,
+    )
+
+    with caplog.at_level("ERROR"):
+        transfers_usecase._post_transfer_side_effects(db, transfer, "fingerprint")
+
+    record = next(
+        record
+        for record in caplog.records
+        if record.message == "transfer_notification_enqueue_failed"
+    )
+    assert record.exc_info is not None
+    assert record.exc_info[0] is OperationalError
+    assert str(record.exc_info[1]) == "broker unavailable"
+
+
+def test_post_transfer_side_effects_does_not_hide_programming_error(monkeypatch):
+    transfer = SimpleNamespace(id=7, from_wallet_id=1, to_wallet_id=2)
+    db = SimpleNamespace(get=lambda *_args: SimpleNamespace(user_id=3))
+
+    monkeypatch.setattr(transfers_usecase, "invalidate_wallet_cache", lambda *_: None)
+
+    def programming_error(*_args):
+        raise RuntimeError("unexpected bug")
+
+    monkeypatch.setattr(
+        transfers_usecase,
+        "enqueue_transfer_notification",
+        programming_error,
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected bug"):
+        transfers_usecase._post_transfer_side_effects(db, transfer, "fingerprint")
 
 
 def _mk_user_and_wallet(db, balance: Decimal) -> Wallet:
@@ -107,7 +160,7 @@ def test_idempotent_transfer_redis_same_key_raises_in_progress_without_double_de
     monkeypatch, db, fake_redis
 ):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
@@ -131,7 +184,7 @@ def test_idempotent_transfer_redis_same_key_raises_in_progress_without_double_de
 
 def test_idempotent_transfer_redis_writes_request_hash(monkeypatch, db, fake_redis):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
@@ -150,7 +203,7 @@ def test_idempotent_transfer_redis_writes_request_hash(monkeypatch, db, fake_red
 
 def test_idempotent_transfer_redis_conflict_by_payload(monkeypatch, db, fake_redis):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
@@ -168,7 +221,7 @@ def test_idempotent_transfer_existing_same_hash_raises_in_progress(
     monkeypatch, db, fake_redis
 ):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
@@ -182,7 +235,7 @@ def test_idempotent_transfer_existing_same_hash_raises_in_progress(
     )
 
     monkeypatch.setattr(
-        "app.services.transfers.hash_payload",
+        "app.usecases.transfers.hash_payload",
         lambda *_args, **_kwargs: "same-hash",
     )
 
@@ -195,7 +248,7 @@ def test_idempotent_transfer_existing_same_hash_raises_in_progress(
 def test_idempotent_transfer_without_redis_raises_in_progress(monkeypatch, db):
     # Null Object pattern case
     monkeypatch.setattr(
-        transfers_service, "get_idempotency_manager", lambda: IdempotencyManager(None)
+        transfers_usecase, "get_idempotency_manager", lambda: IdempotencyManager(None)
     )
 
     from_w = _mk_user_and_wallet(db, Decimal("100.00"))
@@ -217,7 +270,7 @@ def test_idempotent_transfer_redis_error_raises_in_progress(monkeypatch, db):
             raise RedisError("error")
 
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(FailingRedis()),
     )
@@ -235,7 +288,7 @@ def test_idempotent_transfer_error_cleanup_deletes_processing_key(
     monkeypatch, db, fake_redis
 ):
     monkeypatch.setattr(
-        transfers_service,
+        transfers_usecase,
         "get_idempotency_manager",
         lambda: IdempotencyManager(fake_redis),
     )
@@ -246,7 +299,7 @@ def test_idempotent_transfer_error_cleanup_deletes_processing_key(
     def boom(*_args, **_kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(transfers_service, "create_transfer", boom)
+    monkeypatch.setattr(transfers_usecase, "create_transfer", boom)
 
     with pytest.raises(RuntimeError):
         create_transfer_idempotent(db, from_w.id, to_w.id, Decimal("5.00"), "cleanup-1")

@@ -1,10 +1,11 @@
 import json
 import logging
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from redis import Redis, RedisError
 
+from app.core.metrics.cache import record_wallet_cache_lookup
 from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -36,8 +37,12 @@ class Cache:
                 )
                 return None
 
+            data = cast(str | bytes | bytearray, data)
             if isinstance(data, bytes):
                 data = data.decode("utf-8")
+
+            if not isinstance(data, str):
+                return None
 
             return json.loads(data) if json_decode else data
 
@@ -56,6 +61,11 @@ class Cache:
                 exc_info=True,
             )
             return None
+
+    def get_wallet(self, key: str) -> Optional[Any]:
+        data = self.get(key)
+        record_wallet_cache_lookup(cache_hit=data is not None)
+        return data
 
     def set(
         self,

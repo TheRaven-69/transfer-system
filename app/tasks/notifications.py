@@ -1,5 +1,5 @@
 import logging
-import random
+import secrets
 import time
 
 from app.core.celery_app import celery_app
@@ -7,6 +7,7 @@ from app.core.request_context import request_id_ctx
 from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
+random = secrets.SystemRandom()
 
 
 @celery_app.task(
@@ -19,14 +20,16 @@ def send_transaction_notification(
     self,
     transfer_id: int,
     request_id: str | None = None,
+    user_id: int | None = None,
+    idempotency_fingerprint: str | None = None,
 ):
-    token = request_id_ctx.set(request_id)
+    token = request_id_ctx.set(request_id or "-")
 
     try:
         if settings.NOTIFY_DELAY_SEC > 0:
             time.sleep(settings.NOTIFY_DELAY_SEC)
 
-        if random.random() < settings.NOTIFY_FAIL_RATE:
+        if random.random() < settings.NOTIFY_FAIL_RATE:  # nosec B311
             raise RuntimeError("Simulated notification failure")
 
         logger.info(
@@ -34,6 +37,8 @@ def send_transaction_notification(
             extra={
                 "extra_fields": {
                     "transfer_id": transfer_id,
+                    "user_id": user_id,
+                    "task_id": self.request.id,
                 }
             },
         )
@@ -53,6 +58,7 @@ def send_transaction_notification(
             logger.warning(
                 "notification_retry",
                 extra={"extra_fields": log_fields},
+                exc_info=True,
             )
         raise
 

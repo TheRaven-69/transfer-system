@@ -7,6 +7,17 @@ from typing import Any
 from app.core.request_context import request_id_ctx
 from app.core.settings import settings
 
+RESERVED_LOG_FIELDS = {
+    "timestamp",
+    "level",
+    "logger",
+    "message",
+    "request_id",
+    "error_type",
+    "error_message",
+    "exception",
+}
+
 
 class RequestIDFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
@@ -26,9 +37,19 @@ class JsonFormatter(logging.Formatter):
 
         extra_fields = getattr(record, "extra_fields", None)
         if isinstance(extra_fields, dict):
-            log_data.update(extra_fields)
+            log_data.update(
+                {
+                    key: value
+                    for key, value in extra_fields.items()
+                    if key not in RESERVED_LOG_FIELDS
+                }
+            )
 
-        if record.exc_info:
+        if record.exc_info and record.exc_info[0] is not None:
+            exc_type, exc_value, _ = record.exc_info
+            log_data["error_type"] = exc_type.__name__
+            if exc_value is not None:
+                log_data["error_message"] = str(exc_value)
             log_data["exception"] = self.formatException(record.exc_info)
 
         return json.dumps(log_data, ensure_ascii=False)

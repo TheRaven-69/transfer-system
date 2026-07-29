@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 from contextlib import contextmanager, suppress
 from functools import lru_cache
 from typing import Optional
@@ -8,6 +9,8 @@ from redis import Redis, RedisError
 
 from app.core.settings import settings
 from app.services.exceptions import IdempotencyKeyConflict, RequestInProgress
+
+logger = logging.getLogger(__name__)
 
 
 class IdempotencyManager:
@@ -49,6 +52,11 @@ class IdempotencyManager:
                 # Key exists and hash matches -> Request is already being processed or finished
                 raise RequestInProgress()
         except RedisError:
+            logger.warning(
+                "idempotency_redis_operation_failed",
+                extra={"extra_fields": {"operation": "check_and_reserve"}},
+                exc_info=True,
+            )
             # On storage error, we fail closed to prevent accidental double-processing
             raise RequestInProgress() from None
 
@@ -82,6 +90,7 @@ def get_idempotency_manager() -> IdempotencyManager:
         client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
         return IdempotencyManager(client)
     except Exception:
+        logger.warning("idempotency_redis_init_failed", exc_info=True)
         return IdempotencyManager(None)
 
 
@@ -89,3 +98,7 @@ def hash_payload(data: dict) -> str:
     """Stable JSON hashing of a dictionary."""
     serialized = json.dumps(data, sort_keys=True)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def idempotency_key_fingerprint(idempotency_key: str) -> str:
+    return hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:16]
