@@ -396,6 +396,9 @@ default receiver without an external notification integration.
 The API and worker emit structured JSON logs. Send an optional `X-Request-ID`
 header to correlate a request with its transfer and Celery notification logs. If
 the header is missing, the API generates an ID and returns it in the response.
+Every HTTP response also emits an `http_request_completed` access log with the
+request method, path, response status, duration in milliseconds, and request ID.
+Error response bodies include the same value in their `request_id` field.
 
 ### Sentry
 

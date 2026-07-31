@@ -52,7 +52,7 @@ class JsonFormatter(logging.Formatter):
                 log_data["error_message"] = str(exc_value)
             log_data["exception"] = self.formatException(record.exc_info)
 
-        return json.dumps(log_data, ensure_ascii=False)
+        return json.dumps(log_data, ensure_ascii=False, default=str)
 
 
 def setup_logging() -> None:

@@ -32,7 +32,10 @@ def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(
         headers=headers,
     )
     assert r2.status_code == 409
-    assert r2.json() == {"detail": "A request is already in progress"}
+    assert r2.json() == {
+        "detail": "A request is already in progress",
+        "request_id": r2.headers["X-Request-ID"],
+    }
 
     count = db.execute(select(func.count(Transaction.id))).scalar_one()
     assert count == 1
@@ -68,7 +71,10 @@ def test_idempotency_same_key_different_payload_conflict(
         headers=headers,
     )
     assert r2.status_code == 409
-    assert r2.json() == {"detail": "Idempotency-Key reuse with different request data"}
+    assert r2.json() == {
+        "detail": "Idempotency-Key reuse with different request data",
+        "request_id": r2.headers["X-Request-ID"],
+    }
 
 
 def test_idempotency_key_is_required(client, seeded_wallets):
@@ -77,6 +83,11 @@ def test_idempotency_key_is_required(client, seeded_wallets):
     response = client.post(
         "/transfers",
         params={"from_wallet_id": w1.id, "to_wallet_id": w2.id, "amount": "10.00"},
+        headers={"X-Request-ID": "validation-request"},
     )
 
     assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Validation error",
+        "request_id": "validation-request",
+    }

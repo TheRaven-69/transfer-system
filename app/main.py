@@ -1,6 +1,8 @@
 import logging
+from collections.abc import Mapping
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 import sentry_sdk
 from fastapi import FastAPI, Request
@@ -8,11 +10,17 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import router
 from app.core.logging import setup_logging
 from app.core.metrics import HTTP_EXCEPTIONS_TOTAL, refresh_system_metrics
-from app.core.middleware import MetricsMiddleware, RequestIDMiddleware, SentryMiddleware
+from app.core.middleware import (
+    MetricsMiddleware,
+    RequestIDMiddleware,
+    RequestLoggingMiddleware,
+    SentryMiddleware,
+)
 from app.core.request_context import request_id_ctx
 from app.core.sentry import init_sentry
 from app.db.models import Base
@@ -41,6 +49,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Transfer System API", lifespan=lifespan)
 app.add_middleware(MetricsMiddleware)
 app.add_middleware(SentryMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(RequestIDMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -59,13 +68,25 @@ def _track_exception(request: Request, status_code: int, exc: Exception) -> None
     ).inc()
 
 
+def _error_content(detail: Any) -> dict[str, Any]:
+    return {
+        "detail": detail,
+        "request_id": request_id_ctx.get() or "-",
+    }
+
+
 def _error_response(
-    request: Request, status_code: int, exc: Exception, detail: str | None = None
+    request: Request,
+    status_code: int,
+    exc: Exception,
+    detail: Any = None,
+    headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     _track_exception(request, status_code, exc)
     return JSONResponse(
         status_code=status_code,
-        content={"detail": detail or str(exc)},
+        content=_error_content(str(exc) if detail is None else detail),
+        headers=headers,
     )
 
 
@@ -81,8 +102,6 @@ def _service_error_status(exc: ServiceError) -> int:
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    request_id = request_id_ctx.get("-")
-
     sentry_sdk.capture_exception(exc)
 
     logger.exception(
@@ -98,10 +117,18 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     _track_exception(request, 500, exc)
     return JSONResponse(
         status_code=500,
-        content={
-            "detail": "Internal server error",
-            "request_id": request_id,
-        },
+        content=_error_content("Internal server error"),
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return _error_response(
+        request,
+        exc.status_code,
+        exc,
+        detail=exc.detail,
+        headers=exc.headers,
     )
 
 

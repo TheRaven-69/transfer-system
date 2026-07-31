@@ -160,6 +160,19 @@ def test_request_id_is_returned_and_preserved(client):
     assert preserved.headers["X-Request-ID"] == "request-123"
 
 
+def test_framework_http_error_includes_request_id(client):
+    response = client.get(
+        "/missing",
+        headers={"X-Request-ID": "missing-route-request"},
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Not Found",
+        "request_id": "missing-route-request",
+    }
+
+
 def test_sentry_middleware_uses_request_id_context(client, monkeypatch):
     contexts = {}
     monkeypatch.setattr(middleware.sentry_sdk, "set_context", contexts.__setitem__)
@@ -425,12 +438,18 @@ def test_celery_signals_clear_request_context_by_task_id(monkeypatch):
         request_id_ctx.reset(base_token)
 
 
-def test_celery_task_is_free_of_sentry(monkeypatch):
+def test_celery_task_leaves_signal_owned_request_context_unchanged(monkeypatch):
     monkeypatch.setattr(notifications.random, "random", lambda: 1.0)
 
-    notifications.send_transaction_notification.run(
-        42,
-        "request-1",
-        7,
-        "fingerprint-1",
-    )
+    token = request_id_ctx.set("signal-request")
+    try:
+        notifications.send_transaction_notification.run(
+            42,
+            "task-argument-request",
+            7,
+            "fingerprint-1",
+        )
+
+        assert request_id_ctx.get() == "signal-request"
+    finally:
+        request_id_ctx.reset(token)

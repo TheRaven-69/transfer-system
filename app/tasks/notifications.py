@@ -3,7 +3,6 @@ import secrets
 import time
 
 from app.core.celery_app import celery_app
-from app.core.request_context import request_id_ctx
 from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -23,8 +22,6 @@ def send_transaction_notification(
     user_id: int | None = None,
     idempotency_fingerprint: str | None = None,
 ):
-    token = request_id_ctx.set(request_id or "-")
-
     try:
         if settings.NOTIFY_DELAY_SEC > 0:
             time.sleep(settings.NOTIFY_DELAY_SEC)
@@ -61,6 +58,3 @@ def send_transaction_notification(
                 exc_info=True,
             )
         raise
-
-    finally:
-        request_id_ctx.reset(token)
