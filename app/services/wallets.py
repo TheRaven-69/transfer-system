@@ -4,10 +4,24 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.db.models import User, Wallet
+from app.db.tx import on_commit
 
 from .exceptions import UserNotFound, WalletNotFound
 
 logger = logging.getLogger(__name__)
+
+
+def _log_wallet_created(wallet_id: int, user_id: int, balance: str) -> None:
+    logger.info(
+        "wallet_created",
+        extra={
+            "extra_fields": {
+                "wallet_id": wallet_id,
+                "user_id": user_id,
+                "balance": balance,
+            }
+        },
+    )
 
 
 def _get_wallet_from_db(db: Session, wallet_id: int) -> Wallet:
@@ -31,10 +45,11 @@ def create_wallet_for_user(db: Session, user_id: int) -> Wallet:
     db.add(wallet)
     db.flush()
 
-    logger.info(
-        "Wallet created successfully: wallet_id=%s user_id=%s balance=%s",
+    on_commit(
+        db,
+        _log_wallet_created,
         wallet.id,
         user_id,
-        wallet.balance,
+        str(wallet.balance),
     )
     return wallet

@@ -71,10 +71,15 @@ def create_transfer(
         db.flush()
 
     logger.info(
-        "Transfer completed successfully: transfer_id=%s from_wallet_id=%s to_wallet_id=%s amount=%s",
-        transfer.id,
-        from_wallet_id,
-        to_wallet_id,
-        amount,
+        "transfer_created",
+        extra={
+            "extra_fields": {
+                "transfer_id": transfer.id,
+                "from_wallet_id": from_wallet_id,
+                "to_wallet_id": to_wallet_id,
+                "amount": str(amount),
+            },
+        },
     )
+
     return transfer

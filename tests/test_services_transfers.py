@@ -1,6 +1,8 @@
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
+from kombu.exceptions import OperationalError  # type: ignore[import-untyped]
 from redis import RedisError
 
 import app.usecases.transfers as transfers_usecase
@@ -15,6 +17,56 @@ from app.services.exceptions import (
 )
 from app.services.transfers import create_transfer
 from app.usecases.transfers import create_transfer_idempotent
+
+
+def test_post_transfer_side_effects_logs_broker_error(
+    monkeypatch,
+    caplog,
+):
+    transfer = SimpleNamespace(id=7, from_wallet_id=1, to_wallet_id=2)
+    db = SimpleNamespace(get=lambda *_args: SimpleNamespace(user_id=3))
+
+    monkeypatch.setattr(transfers_usecase, "invalidate_wallet_cache", lambda *_: None)
+
+    def broker_unavailable(*_args):
+        raise OperationalError("broker unavailable")
+
+    monkeypatch.setattr(
+        transfers_usecase,
+        "enqueue_transfer_notification",
+        broker_unavailable,
+    )
+
+    with caplog.at_level("ERROR"):
+        transfers_usecase._post_transfer_side_effects(db, transfer, "fingerprint")
+
+    record = next(
+        record
+        for record in caplog.records
+        if record.message == "transfer_notification_enqueue_failed"
+    )
+    assert record.exc_info is not None
+    assert record.exc_info[0] is OperationalError
+    assert str(record.exc_info[1]) == "broker unavailable"
+
+
+def test_post_transfer_side_effects_does_not_hide_programming_error(monkeypatch):
+    transfer = SimpleNamespace(id=7, from_wallet_id=1, to_wallet_id=2)
+    db = SimpleNamespace(get=lambda *_args: SimpleNamespace(user_id=3))
+
+    monkeypatch.setattr(transfers_usecase, "invalidate_wallet_cache", lambda *_: None)
+
+    def programming_error(*_args):
+        raise RuntimeError("unexpected bug")
+
+    monkeypatch.setattr(
+        transfers_usecase,
+        "enqueue_transfer_notification",
+        programming_error,
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected bug"):
+        transfers_usecase._post_transfer_side_effects(db, transfer, "fingerprint")
 
 
 def _mk_user_and_wallet(db, balance: Decimal) -> Wallet:

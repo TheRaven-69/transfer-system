@@ -212,3 +212,4 @@ app.db
 .idea
 .env.docker
 k8s/secrets.yaml
+frontend/node_modules/

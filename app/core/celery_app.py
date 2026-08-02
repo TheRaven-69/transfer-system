@@ -4,10 +4,12 @@ from contextvars import Token
 import sentry_sdk
 from celery import Celery, signals  # type: ignore[import-untyped]
 
+from app.core.logging import setup_logging
 from app.core.request_context import request_id_ctx
 from app.core.sentry import init_sentry, set_transfer_context
 from app.core.settings import settings
 
+setup_logging()
 init_sentry()
 
 celery_app = Celery(
@@ -17,7 +19,11 @@ celery_app = Celery(
     include=["app.tasks.notifications"],
 )
 
-celery_app.conf.update(task_acks_late=True, worker_prefetch_multiplier=1)
+celery_app.conf.update(
+    task_acks_late=True,
+    worker_hijack_root_logger=False,
+    worker_prefetch_multiplier=1,
+)
 _request_id_ctx_tokens: dict[str, Token[str | None]] = {}
 
 

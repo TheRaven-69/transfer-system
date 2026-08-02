@@ -57,4 +57,7 @@ def test_post_transfers_not_enough_money_returns_409(client, monkeypatch):
         headers={"Idempotency-Key": "url-test-2"},
     )
     assert r.status_code == 409
-    assert r.json() == {"detail": "Insufficient funds"}
+    assert r.json() == {
+        "detail": "Insufficient funds",
+        "request_id": r.headers["X-Request-ID"],
+    }

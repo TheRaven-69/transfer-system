@@ -1,6 +1,8 @@
 import logging
 from decimal import Decimal
 
+from celery.exceptions import CeleryError  # type: ignore[import-untyped]
+from kombu.exceptions import KombuError  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session
 
 from app.db.models import Transaction, Wallet
@@ -33,10 +35,15 @@ def _post_transfer_side_effects(
             user_id,
             idempotency_fingerprint,
         )
-    except Exception:
+    except (CeleryError, KombuError):
         logger.exception(
-            "Failed to enqueue transfer notification: transfer_id=%s",
-            transfer.id,
+            "transfer_notification_enqueue_failed",
+            extra={
+                "extra_fields": {
+                    "transfer_id": transfer.id,
+                    "user_id": user_id,
+                },
+            },
         )
 
 

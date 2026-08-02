@@ -33,6 +33,12 @@ def test_get_wallet_not_found_returns_404(client, monkeypatch):
 
     monkeypatch.setattr(wallets_router, "get_wallet_cached", fake_get_wallet_cached)
 
-    r = client.get("/wallets/999999")
+    r = client.get(
+        "/wallets/999999",
+        headers={"X-Request-ID": "wallet-not-found-request"},
+    )
     assert r.status_code == 404
-    assert r.json() == {"detail": "Wallet with id 999999 not found."}
+    assert r.json() == {
+        "detail": "Wallet with id 999999 not found.",
+        "request_id": "wallet-not-found-request",
+    }

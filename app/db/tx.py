@@ -1,8 +1,11 @@
+import logging
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import Any
 
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 PostCommitHook = tuple[Callable[..., Any], tuple[Any, ...], dict[str, Any]]
 POST_COMMIT_HOOKS_KEY = "post_commit_hooks"
@@ -44,9 +47,15 @@ def transaction_scope(db: Session) -> Generator[None, None, None]:
             for f, a, k in hooks:
                 try:
                     f(*a, **k)
-                except Exception as e:
-                    # Isolation: one failing hook doesn't affect others.
-                    print(f"Post-commit hook failed: {e}")
+                except Exception:
+                    logger.exception(
+                        "post_commit_hook_failed",
+                        extra={
+                            "extra_fields": {
+                                "hook_name": getattr(f, "__name__", str(f)),
+                            }
+                        },
+                    )
         except Exception:
             # Clear hooks on failure to prevent leakage to next transaction
             db.info[POST_COMMIT_HOOKS_KEY] = []
