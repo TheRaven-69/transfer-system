@@ -1,7 +1,9 @@
 import json
 
+import pytest
 import redis
 
+import app.cache as cache_module
 from app.cache import Cache
 
 
@@ -60,6 +62,46 @@ class DummyWallet:
         self.id = wallet_id
         self.balance = balance
         self.user_id = user_id
+
+
+def test_cache_init_logs_expected_redis_error(monkeypatch, caplog):
+    cache_module.get_cache.cache_clear()
+    monkeypatch.setattr(cache_module.settings, "CACHE_ENABLED", True)
+
+    def redis_unavailable(*_args, **_kwargs):
+        raise redis.RedisError("redis unavailable")
+
+    monkeypatch.setattr(cache_module.Redis, "from_url", redis_unavailable)
+
+    try:
+        with caplog.at_level("WARNING"):
+            cache = cache_module.get_cache()
+
+        assert cache._client is None
+        record = next(
+            record for record in caplog.records if record.message == "redis_init_failed"
+        )
+        assert record.exc_info is not None
+        assert record.exc_info[0] is redis.RedisError
+        assert str(record.exc_info[1]) == "redis unavailable"
+    finally:
+        cache_module.get_cache.cache_clear()
+
+
+def test_cache_init_does_not_hide_programming_error(monkeypatch):
+    cache_module.get_cache.cache_clear()
+    monkeypatch.setattr(cache_module.settings, "CACHE_ENABLED", True)
+
+    def programming_error(*_args, **_kwargs):
+        raise RuntimeError("unexpected bug")
+
+    monkeypatch.setattr(cache_module.Redis, "from_url", programming_error)
+
+    try:
+        with pytest.raises(RuntimeError, match="unexpected bug"):
+            cache_module.get_cache()
+    finally:
+        cache_module.get_cache.cache_clear()
 
 
 def test_cache_hit_returns_cached_and_skips_db(monkeypatch):

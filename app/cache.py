@@ -31,7 +31,7 @@ class Cache:
         try:
             data = self._client.get(key)
             if not data:
-                logger.warning(
+                logger.debug(
                     "cache_miss",
                     extra={"extra_fields": {"key": key}},
                 )
@@ -118,6 +118,6 @@ def get_cache() -> Cache:
     try:
         client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
         return Cache(client)
-    except Exception:
+    except (RedisError, ValueError):
         logger.warning("redis_init_failed", exc_info=True)
         return Cache(None)

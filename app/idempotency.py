@@ -1,7 +1,7 @@
 import hashlib
 import json
 import logging
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from functools import lru_cache
 from typing import Optional
 
@@ -54,7 +54,12 @@ class IdempotencyManager:
         except RedisError:
             logger.warning(
                 "idempotency_redis_operation_failed",
-                extra={"extra_fields": {"operation": "check_and_reserve"}},
+                extra={
+                    "extra_fields": {
+                        "operation": "check_and_reserve",
+                        "key_fingerprint": idempotency_key_fingerprint(key),
+                    }
+                },
                 exc_info=True,
             )
             # On storage error, we fail closed to prevent accidental double-processing
@@ -64,8 +69,19 @@ class IdempotencyManager:
         """Removes the idempotency key, usually called on transaction failure."""
         if not self._client:
             return
-        with suppress(RedisError):
+        try:
             self._client.delete(self._get_key(key))
+        except RedisError:
+            logger.warning(
+                "idempotency_reservation_cleanup_failed",
+                extra={
+                    "extra_fields": {
+                        "operation": "remove_reservation",
+                        "key_fingerprint": idempotency_key_fingerprint(key),
+                    }
+                },
+                exc_info=True,
+            )
 
     @contextmanager
     def reserve(self, key: str, payload_hash: str):
@@ -89,8 +105,12 @@ def get_idempotency_manager() -> IdempotencyManager:
         # but encapsulated in its own manager
         client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
         return IdempotencyManager(client)
-    except Exception:
-        logger.warning("idempotency_redis_init_failed", exc_info=True)
+    except (RedisError, ValueError):
+        logger.warning(
+            "idempotency_redis_init_failed",
+            extra={"extra_fields": {"operation": "initialize"}},
+            exc_info=True,
+        )
         return IdempotencyManager(None)
 
 

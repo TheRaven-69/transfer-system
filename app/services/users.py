@@ -3,12 +3,25 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.db.models import User
-from app.db.tx import transaction_scope
+from app.db.tx import on_commit, transaction_scope
 
 from .exceptions import UserNotFound, UserWalletNotFound
 from .wallets import create_wallet_for_user
 
 logger = logging.getLogger(__name__)
+
+
+def _log_user_created(user_id: int, wallet_id: int, balance: str) -> None:
+    logger.info(
+        "user_created",
+        extra={
+            "extra_fields": {
+                "wallet_id": wallet_id,
+                "user_id": user_id,
+                "balance": balance,
+            }
+        },
+    )
 
 
 def create_user(db: Session) -> User:
@@ -18,15 +31,12 @@ def create_user(db: Session) -> User:
         db.flush()
         wallet = create_wallet_for_user(db, user.id)
         user.wallet = wallet
-        logger.info(
-            "user_created",
-            extra={
-                "extra_fields": {
-                    "wallet_id": wallet.id,
-                    "user_id": user.id,
-                    "balance": str(wallet.balance),
-                }
-            },
+        on_commit(
+            db,
+            _log_user_created,
+            user.id,
+            wallet.id,
+            str(wallet.balance),
         )
     return user
 
