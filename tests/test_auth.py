@@ -118,6 +118,7 @@ def test_refresh_rotates_token_and_rejects_reuse(client, db):
     assert old_record is not None
     assert old_record.revoked_at is not None
 
+    client.cookies.clear()
     client.cookies.set("refresh_token", old_refresh_token, path="/auth")
     assert client.post("/auth/refresh").status_code == 401
 
