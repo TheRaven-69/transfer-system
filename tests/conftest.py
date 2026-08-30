@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 os.environ.setdefault("ENV_FILE", ".env.test")
 
@@ -9,9 +10,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.celery_app import celery_app
+from app.core.security import create_token
 from app.db.models import Base, User, Wallet
 from app.db.session import get_db
 from app.main import app
+from tests.factories import make_user
 
 
 class FakeRedis:
@@ -86,9 +89,39 @@ def client(db):
 
 
 @pytest.fixture()
+def auth_user(db):
+    user = User(
+        username="authenticated_user",
+        email="authenticated@example.com",
+        password_hash="disabled",
+    )
+    db.add(user)
+    db.flush()
+    wallet = Wallet(user_id=user.id, balance=1000)
+    db.add(wallet)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@pytest.fixture()
+def auth_headers_factory():
+    def factory(user_id: int) -> dict[str, str]:
+        token, _ = create_token(user_id, "access", timedelta(minutes=5))
+        return {"Authorization": f"Bearer {token}"}
+
+    return factory
+
+
+@pytest.fixture()
+def auth_headers(auth_user, auth_headers_factory):
+    return auth_headers_factory(auth_user.id)
+
+
+@pytest.fixture()
 def seeded_wallets(db):
-    u1 = User()
-    u2 = User()
+    u1 = make_user()
+    u2 = make_user()
     db.add_all([u1, u2])
     db.commit()
     db.refresh(u1)

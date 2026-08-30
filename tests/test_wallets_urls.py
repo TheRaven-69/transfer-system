@@ -10,22 +10,22 @@ class DummyWallet:
         self.balance = Decimal(balance)
 
 
-def test_get_wallet_by_id_returns_wallet(client, monkeypatch):
+def test_get_wallet_by_id_returns_wallet(client, monkeypatch, auth_user, auth_headers):
     def fake_get_wallet_cached(db, wallet_id: int):
-        return {"id": wallet_id, "user_id": 99, "balance": "123.45"}
+        return {"id": wallet_id, "user_id": auth_user.id, "balance": "123.45"}
 
     monkeypatch.setattr(wallets_router, "get_wallet_cached", fake_get_wallet_cached)
 
-    r = client.get("/wallets/5")
+    r = client.get("/wallets/5", headers=auth_headers)
     assert r.status_code == 200
 
     data = r.json()
     assert data["id"] == 5
-    assert data["user_id"] == 99
+    assert data["user_id"] == auth_user.id
     assert data["balance"] is not None
 
 
-def test_get_wallet_not_found_returns_404(client, monkeypatch):
+def test_get_wallet_not_found_returns_404(client, monkeypatch, auth_headers):
     from app.services.exceptions import WalletNotFound
 
     def fake_get_wallet_cached(db, wallet_id: int):
@@ -33,6 +33,6 @@ def test_get_wallet_not_found_returns_404(client, monkeypatch):
 
     monkeypatch.setattr(wallets_router, "get_wallet_cached", fake_get_wallet_cached)
 
-    r = client.get("/wallets/999999")
+    r = client.get("/wallets/999999", headers=auth_headers)
     assert r.status_code == 404
     assert r.json() == {"detail": "Wallet with id 999999 not found."}

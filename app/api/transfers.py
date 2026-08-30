@@ -3,6 +3,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import AuthenticatedUser, get_current_user
 from app.core.metrics.collectors import TRANSFER_AMOUNT_TOTAL, TRANSFERS_CREATED_TOTAL
 from app.db.session import get_db
 from app.usecases.transfers import create_transfer_idempotent as create_transfer
@@ -17,9 +18,15 @@ def transfer(
     amount: Decimal,
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     transfer = create_transfer(
-        db, from_wallet_id, to_wallet_id, amount, idempotency_key
+        db,
+        from_wallet_id,
+        to_wallet_id,
+        amount,
+        idempotency_key,
+        actor_user_id=current_user.id,
     )
     TRANSFERS_CREATED_TOTAL.inc()
     TRANSFER_AMOUNT_TOTAL.inc(float(transfer.amount))

@@ -71,6 +71,25 @@ class SentrySettings(BaseSettings):
         return self.sensitive_keys | self.extra_sensitive_keys
 
 
+class AuthSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=os.getenv("ENV_FILE", ".env"),
+        env_file_encoding="utf-8",
+        env_prefix="AUTH_",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    jwt_secret: str = Field(min_length=32)
+    access_token_minutes: int = Field(default=15, ge=1, le=1440)
+    refresh_token_days: int = Field(default=7, ge=1, le=90)
+    issuer: str = "transfer-system"
+
+
+def load_auth_settings() -> AuthSettings:
+    return AuthSettings()  # type: ignore[call-arg]
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=os.getenv("ENV_FILE", ".env"),
@@ -132,6 +151,7 @@ class Settings(BaseSettings):
         return value
 
     sentry: SentrySettings = Field(default_factory=SentrySettings)
+    auth: AuthSettings = Field(default_factory=load_auth_settings)
 
 
 settings = Settings()  # type: ignore[call-arg]

@@ -6,7 +6,7 @@ from app.core.metrics.collectors import (
     DB_QUERY_DURATION_SECONDS,
     DB_QUERY_ERRORS_TOTAL,
 )
-from app.db import engine
+from app.db.session import engine
 
 
 def _query_operation(statement: str) -> str:

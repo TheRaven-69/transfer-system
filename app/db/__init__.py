@@ -1,4 +1,9 @@
-from .models import Base, Transaction, User, Wallet
-from .session import SessionLocal, engine, get_db
+from .models import Base, RefreshToken, Transaction, User, Wallet
 
-__all__ = ["engine", "SessionLocal", "get_db", "Base", "User", "Wallet", "Transaction"]
+__all__ = [
+    "Base",
+    "User",
+    "Wallet",
+    "Transaction",
+    "RefreshToken",
+]

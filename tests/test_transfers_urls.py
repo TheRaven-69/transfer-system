@@ -13,9 +13,14 @@ class DummyTransfer:
         self.created_at = datetime(2026, 2, 7, 12, 0, 0)
 
 
-def test_post_transfers_creates_transfer(client, monkeypatch):
+def test_post_transfers_creates_transfer(client, monkeypatch, auth_user, auth_headers):
     def fake_create_transfer(
-        db, from_wallet_id: int, to_wallet_id: int, amount, idempotency_key: str
+        db,
+        from_wallet_id: int,
+        to_wallet_id: int,
+        amount,
+        idempotency_key: str,
+        actor_user_id: int | None = None,
     ):
         return DummyTransfer(
             id=1,
@@ -28,8 +33,12 @@ def test_post_transfers_creates_transfer(client, monkeypatch):
 
     r = client.post(
         "/transfers",
-        params={"from_wallet_id": 1, "to_wallet_id": 2, "amount": "25.5"},
-        headers={"Idempotency-Key": "url-test-1"},
+        params={
+            "from_wallet_id": auth_user.wallet.id,
+            "to_wallet_id": 2,
+            "amount": "25.5",
+        },
+        headers={**auth_headers, "Idempotency-Key": "url-test-1"},
     )
     assert r.status_code == 200
 
@@ -41,11 +50,18 @@ def test_post_transfers_creates_transfer(client, monkeypatch):
     assert data["created_at"] is not None
 
 
-def test_post_transfers_not_enough_money_returns_409(client, monkeypatch):
+def test_post_transfers_not_enough_money_returns_409(
+    client, monkeypatch, auth_user, auth_headers
+):
     from app.services.exceptions import InsufficientFunds
 
     def fake_create_transfer(
-        db, from_wallet_id: int, to_wallet_id: int, amount, idempotency_key: str
+        db,
+        from_wallet_id: int,
+        to_wallet_id: int,
+        amount,
+        idempotency_key: str,
+        actor_user_id: int | None = None,
     ):
         raise InsufficientFunds()
 
@@ -53,8 +69,12 @@ def test_post_transfers_not_enough_money_returns_409(client, monkeypatch):
 
     r = client.post(
         "/transfers",
-        params={"from_wallet_id": 1, "to_wallet_id": 2, "amount": "9999"},
-        headers={"Idempotency-Key": "url-test-2"},
+        params={
+            "from_wallet_id": auth_user.wallet.id,
+            "to_wallet_id": 2,
+            "amount": "9999",
+        },
+        headers={**auth_headers, "Idempotency-Key": "url-test-2"},
     )
     assert r.status_code == 409
     assert r.json() == {"detail": "Insufficient funds"}

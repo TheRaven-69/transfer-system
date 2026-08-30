@@ -2,13 +2,14 @@ from sqlalchemy import select
 
 from app.db.models import User
 from app.db.tx import on_commit, transaction_scope
+from tests.factories import make_user
 
 
 def test_transaction_rollback_actual_data(db):
     """Verify that database changes are rolled back on exception."""
     try:
         with transaction_scope(db):
-            user = User()
+            user = make_user()
             db.add(user)
             db.flush()
             raise RuntimeError("Force Rollback")
@@ -22,13 +23,13 @@ def test_transaction_rollback_actual_data(db):
 def test_nested_transaction_rollback_preserves_outer(db):
     """Verify that a failed nested transaction doesn't roll back the outer one if caught."""
     with transaction_scope(db):
-        outer_user = User()
+        outer_user = make_user()
         db.add(outer_user)
         db.flush()
 
         try:
             with transaction_scope(db):
-                inner_user = User()
+                inner_user = make_user()
                 db.add(inner_user)
                 db.flush()
                 raise RuntimeError("Nested Rollback")

@@ -8,6 +8,7 @@ from app.db.models import Transaction, Wallet
 from app.db.tx import transaction_scope
 
 from .exceptions import (
+    AccessDenied,
     CannotTransferToSameWallet,
     InsufficientFunds,
     InvalidTransferAmount,
@@ -23,6 +24,7 @@ def create_transfer(
     from_wallet_id: int,
     to_wallet_id: int,
     amount: Decimal,
+    actor_user_id: int | None = None,
 ) -> Transaction:
     if from_wallet_id == to_wallet_id:
         raise CannotTransferToSameWallet()
@@ -55,6 +57,9 @@ def create_transfer(
 
         if not to_wallet:
             raise WalletNotFound(to_wallet_id)
+
+        if actor_user_id is not None and from_wallet.user_id != actor_user_id:
+            raise AccessDenied()
 
         if from_wallet.balance < amount:
             raise InsufficientFunds()
