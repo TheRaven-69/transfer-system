@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 
@@ -11,6 +12,8 @@ from app.core.metrics.collectors import (
     HTTP_REQUESTS_TOTAL,
 )
 from app.core.request_context import request_id_ctx
+
+logger = logging.getLogger(__name__)
 
 
 def _sentry_user_from_request_state(request: Request) -> dict[str, str] | None:
@@ -36,6 +39,30 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             request_id_ctx.reset(token)
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.perf_counter()
+        status_code = 500
+
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            return response
+        finally:
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            logger.info(
+                "http_request_completed",
+                extra={
+                    "extra_fields": {
+                        "method": request.method,
+                        "path": request.url.path,
+                        "status": status_code,
+                        "duration_ms": round(duration_ms, 3),
+                    }
+                },
+            )
 
 
 class SentryMiddleware(BaseHTTPMiddleware):

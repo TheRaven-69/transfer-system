@@ -337,6 +337,22 @@ latency, RabbitMQ queue depth, PostgreSQL connections, and Redis memory.
 Alert rules cover API errors and latency, ledger consistency, database errors,
 RabbitMQ backlog, and metric collection failures.
 
+Application and worker logs are emitted as structured JSON and include the
+current request ID. Error responses also return the same ID so a client-visible
+failure can be correlated with backend and Celery logs.
+
+Verify the JSON log format locally:
+
+```bash
+python scripts/verify_json_logging.py
+```
+
+With the Docker environment running, verify request and failure correlation:
+
+```bash
+bash scripts/verify_live_failure_logging.sh
+```
+
 ## Project structure
 
 ```text

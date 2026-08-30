@@ -21,6 +21,13 @@ def login(client, identifier="alice.user", password=REGISTER_PAYLOAD["password"]
     )
 
 
+def assert_error_response(response, detail: str) -> None:
+    assert response.json() == {
+        "detail": detail,
+        "request_id": response.headers["X-Request-ID"],
+    }
+
+
 def test_register_creates_user_wallet_and_password_hash(client, db):
     response = register(client)
 
@@ -44,14 +51,14 @@ def test_register_rejects_duplicate_username_and_email(client):
         email="different@example.com",
     )
     assert duplicate_username.status_code == 409
-    assert duplicate_username.json() == {"detail": "Username is already registered"}
+    assert_error_response(duplicate_username, "Username is already registered")
 
     duplicate_email = register(
         client,
         username="different-user",
     )
     assert duplicate_email.status_code == 409
-    assert duplicate_email.json() == {"detail": "Email is already registered"}
+    assert_error_response(duplicate_email, "Email is already registered")
 
 
 def test_login_accepts_username_or_email_and_sets_refresh_cookie(client):
@@ -76,9 +83,8 @@ def test_login_uses_generic_error_for_unknown_user_or_wrong_password(client):
 
     assert wrong_password.status_code == 401
     assert unknown_user.status_code == 401
-    expected = {"detail": "Invalid username, email, or password"}
-    assert wrong_password.json() == expected
-    assert unknown_user.json() == expected
+    assert_error_response(wrong_password, "Invalid username, email, or password")
+    assert_error_response(unknown_user, "Invalid username, email, or password")
 
 
 def test_me_requires_access_token_and_returns_current_user(client):
@@ -143,7 +149,7 @@ def test_user_cannot_access_another_users_profile(client):
     )
     assert first_user["id"] != second_user["id"]
     assert response.status_code == 403
-    assert response.json() == {"detail": "Access denied"}
+    assert_error_response(response, "Access denied")
 
 
 def test_user_cannot_transfer_from_another_users_wallet(client):

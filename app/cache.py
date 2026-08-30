@@ -1,5 +1,5 @@
 import json
-from contextlib import suppress
+import logging
 from functools import lru_cache
 from typing import Any, Optional, cast
 
@@ -7,6 +7,8 @@ from redis import Redis, RedisError
 
 from app.core.metrics.cache import record_wallet_cache_lookup
 from app.core.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class Cache:
@@ -20,10 +22,19 @@ class Cache:
 
     def get(self, key: str, json_decode: bool = True) -> Optional[Any]:
         if not self._client:
+            logger.debug(
+                "cache_disabled",
+                extra={"extra_fields": {"key": key}},
+            )
             return None
+
         try:
             data = self._client.get(key)
             if not data:
+                logger.debug(
+                    "cache_miss",
+                    extra={"extra_fields": {"key": key}},
+                )
                 return None
 
             data = cast(str | bytes | bytearray, data)
@@ -34,7 +45,21 @@ class Cache:
                 return None
 
             return json.loads(data) if json_decode else data
-        except (RedisError, json.JSONDecodeError, TypeError):
+
+        except RedisError:
+            logger.warning(
+                "redis_get_failed",
+                extra={"extra_fields": {"key": key}},
+                exc_info=True,
+            )
+            return None
+
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(
+                "cache_decode_failed",
+                extra={"extra_fields": {"key": key}},
+                exc_info=True,
+            )
             return None
 
     def get_wallet(self, key: str) -> Optional[Any]:
@@ -60,14 +85,29 @@ class Cache:
             val = json.dumps(value) if json_encode else value
             return bool(self._client.set(key, val, ex=ex, nx=nx))
         except RedisError:
+            logger.warning(
+                "redis_set_failed",
+                extra={"extra_fields": {"key": key}},
+                exc_info=True,
+            )
             return False
 
     def delete(self, key: str) -> None:
         if not self._client:
+            logger.debug(
+                "cache_disabled",
+                extra={"extra_fields": {"key": key}},
+            )
             return
 
-        with suppress(RedisError):
+        try:
             self._client.delete(key)
+        except RedisError:
+            logger.warning(
+                "redis_delete_failed",
+                extra={"extra_fields": {"key": key}},
+                exc_info=True,
+            )
 
 
 @lru_cache(maxsize=1)
@@ -78,6 +118,6 @@ def get_cache() -> Cache:
     try:
         client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
         return Cache(client)
-    except Exception:
-        # Fallback to Null Object if connection fails during init
+    except (RedisError, ValueError):
+        logger.warning("redis_init_failed", exc_info=True)
         return Cache(None)

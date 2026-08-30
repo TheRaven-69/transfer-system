@@ -1,6 +1,7 @@
 import hashlib
 import json
-from contextlib import contextmanager, suppress
+import logging
+from contextlib import contextmanager
 from functools import lru_cache
 from typing import Optional
 
@@ -8,6 +9,8 @@ from redis import Redis, RedisError
 
 from app.core.settings import settings
 from app.services.exceptions import IdempotencyKeyConflict, RequestInProgress
+
+logger = logging.getLogger(__name__)
 
 
 class IdempotencyManager:
@@ -49,6 +52,16 @@ class IdempotencyManager:
                 # Key exists and hash matches -> Request is already being processed or finished
                 raise RequestInProgress()
         except RedisError:
+            logger.warning(
+                "idempotency_redis_operation_failed",
+                extra={
+                    "extra_fields": {
+                        "operation": "check_and_reserve",
+                        "key_fingerprint": idempotency_key_fingerprint(key),
+                    }
+                },
+                exc_info=True,
+            )
             # On storage error, we fail closed to prevent accidental double-processing
             raise RequestInProgress() from None
 
@@ -56,8 +69,19 @@ class IdempotencyManager:
         """Removes the idempotency key, usually called on transaction failure."""
         if not self._client:
             return
-        with suppress(RedisError):
+        try:
             self._client.delete(self._get_key(key))
+        except RedisError:
+            logger.warning(
+                "idempotency_reservation_cleanup_failed",
+                extra={
+                    "extra_fields": {
+                        "operation": "remove_reservation",
+                        "key_fingerprint": idempotency_key_fingerprint(key),
+                    }
+                },
+                exc_info=True,
+            )
 
     @contextmanager
     def reserve(self, key: str, payload_hash: str):
@@ -81,7 +105,12 @@ def get_idempotency_manager() -> IdempotencyManager:
         # but encapsulated in its own manager
         client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
         return IdempotencyManager(client)
-    except Exception:
+    except (RedisError, ValueError):
+        logger.warning(
+            "idempotency_redis_init_failed",
+            extra={"extra_fields": {"operation": "initialize"}},
+            exc_info=True,
+        )
         return IdempotencyManager(None)
 
 

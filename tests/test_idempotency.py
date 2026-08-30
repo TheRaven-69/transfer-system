@@ -1,10 +1,34 @@
 from decimal import Decimal
 
+from redis import RedisError
 from sqlalchemy import func, select
 
 import app.usecases.transfers as transfers_usecase
 from app.db.models import Transaction, Wallet
 from app.idempotency import IdempotencyManager
+
+
+def test_reservation_cleanup_logs_redis_error_without_raw_key(caplog):
+    class FailingRedis:
+        def delete(self, *_args, **_kwargs):
+            raise RedisError("cleanup unavailable")
+
+    manager = IdempotencyManager(FailingRedis())  # type: ignore[arg-type]
+
+    with caplog.at_level("WARNING"):
+        manager.remove_reservation("transfer:raw-secret-key")
+
+    record = next(
+        record
+        for record in caplog.records
+        if record.message == "idempotency_reservation_cleanup_failed"
+    )
+    assert record.exc_info is not None
+    assert record.exc_info[0] is RedisError
+    assert str(record.exc_info[1]) == "cleanup unavailable"
+    extra_fields = record.__dict__["extra_fields"]
+    assert extra_fields["operation"] == "remove_reservation"
+    assert "raw-secret-key" not in str(extra_fields)
 
 
 def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(
@@ -35,7 +59,10 @@ def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(
         headers=headers,
     )
     assert r2.status_code == 409
-    assert r2.json() == {"detail": "A request is already in progress"}
+    assert r2.json() == {
+        "detail": "A request is already in progress",
+        "request_id": r2.headers["X-Request-ID"],
+    }
 
     count = db.execute(select(func.count(Transaction.id))).scalar_one()
     assert count == 1
@@ -74,7 +101,10 @@ def test_idempotency_same_key_different_payload_conflict(
         headers=headers,
     )
     assert r2.status_code == 409
-    assert r2.json() == {"detail": "Idempotency-Key reuse with different request data"}
+    assert r2.json() == {
+        "detail": "Idempotency-Key reuse with different request data",
+        "request_id": r2.headers["X-Request-ID"],
+    }
 
 
 def test_idempotency_key_is_required(client, seeded_wallets, auth_headers_factory):
@@ -83,10 +113,17 @@ def test_idempotency_key_is_required(client, seeded_wallets, auth_headers_factor
     response = client.post(
         "/transfers",
         params={"from_wallet_id": w1.id, "to_wallet_id": w2.id, "amount": "10.00"},
-        headers=auth_headers_factory(w1.user_id),
+        headers={
+            **auth_headers_factory(w1.user_id),
+            "X-Request-ID": "validation-request",
+        },
     )
 
     assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Validation error",
+        "request_id": "validation-request",
+    }
 
 
 def test_idempotency_key_is_scoped_to_authenticated_user(

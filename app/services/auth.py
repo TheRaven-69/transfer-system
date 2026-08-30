@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import or_, select, update
@@ -14,7 +15,7 @@ from app.core.security import (
 )
 from app.core.settings import settings
 from app.db.models import RefreshToken, User
-from app.db.tx import transaction_scope
+from app.db.tx import on_commit, transaction_scope
 from app.services.exceptions import (
     EmailAlreadyExists,
     InvalidCredentials,
@@ -23,7 +24,15 @@ from app.services.exceptions import (
 )
 from app.services.wallets import create_wallet_for_user
 
+logger = logging.getLogger(__name__)
 _DUMMY_PASSWORD_HASH = hash_password("invalid-password-placeholder")
+
+
+def _log_user_created(user_id: int, wallet_id: int) -> None:
+    logger.info(
+        "user_created",
+        extra={"extra_fields": {"user_id": user_id, "wallet_id": wallet_id}},
+    )
 
 
 def register_user(db: Session, username: str, email: str, password: str) -> User:
@@ -42,6 +51,7 @@ def register_user(db: Session, username: str, email: str, password: str) -> User
             db.add(user)
             db.flush()
             user.wallet = create_wallet_for_user(db, user.id)
+            on_commit(db, _log_user_created, user.id, user.wallet.id)
     except IntegrityError as exc:
         constraint = str(exc.orig).casefold()
         if "username" in constraint:

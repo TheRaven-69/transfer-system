@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -12,6 +14,8 @@ from app.core.metrics.collectors import (
 )
 from app.db.models import Transaction, User, Wallet
 
+logger = logging.getLogger(__name__)
+
 
 def refresh_system_metrics() -> None:
     try:
@@ -25,6 +29,11 @@ def refresh_system_metrics() -> None:
                 select(func.coalesce(func.sum(Wallet.balance), 0))
             ).scalar_one()
     except SQLAlchemyError:
+        logger.warning(
+            "system_metrics_collection_failed",
+            extra={"extra_fields": {"operation": "refresh_system_metrics"}},
+            exc_info=True,
+        )
         SYSTEM_METRICS_COLLECTION_ERRORS_TOTAL.inc()
         METRICS_COLLECTION_SUCCESS.set(0)
         return
