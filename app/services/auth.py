@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -94,7 +94,7 @@ def rotate_refresh_token(db: Session, raw_token: str) -> tuple[str, str]:
     except TokenDecodeError as exc:
         raise InvalidToken() from exc
 
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     with transaction_scope(db):
         user_id = db.scalar(
             update(RefreshToken)
@@ -129,5 +129,5 @@ def revoke_refresh_token(db: Session, raw_token: str) -> None:
                 RefreshToken.token_hash == token_hash(raw_token),
                 RefreshToken.revoked_at.is_(None),
             )
-            .values(revoked_at=datetime.now(UTC))
+            .values(revoked_at=datetime.now(timezone.utc))
         )

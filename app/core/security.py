@@ -2,7 +2,7 @@ import base64
 import hashlib
 import hmac
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -66,7 +66,7 @@ def verify_password(password: str, encoded_hash: str) -> bool:
 def create_token(
     user_id: int, token_type: TokenType, lifetime: timedelta
 ) -> tuple[str, datetime]:
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     expires_at = now + lifetime
     payload = {
         "sub": str(user_id),
