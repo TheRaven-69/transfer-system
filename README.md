@@ -1,549 +1,383 @@
-# Transfer System
+# Transfer System API
 
-A production-oriented wallet and money transfer service built with FastAPI,
-PostgreSQL, Redis, RabbitMQ, and Celery. The project demonstrates transaction-safe
-balance updates, duplicate-request protection, asynchronous processing, structured
-logging, metrics, alerting, and container orchestration.
-
-The repository includes a small browser UI, an OpenAPI interface, a complete Docker
-Compose environment, and Kubernetes manifests with API and worker autoscaling.
-
-> This is an educational and portfolio project. See
-> [Production considerations](#production-considerations) before treating it as a
-> real financial system.
-
-## Table of contents
-
-- [Features](#features)
-- [Architecture](#architecture)
-- [Technology stack](#technology-stack)
-- [Quick start](#quick-start)
-- [API usage](#api-usage)
-- [How a transfer is processed](#how-a-transfer-is-processed)
-- [Reliability and consistency](#reliability-and-consistency)
-- [Configuration](#configuration)
-- [Observability](#observability)
-- [Development and testing](#development-and-testing)
-- [Load testing](#load-testing)
-- [Kubernetes](#kubernetes)
-- [Project structure](#project-structure)
-- [Production considerations](#production-considerations)
-
-## Features
-
-- User creation with one automatically created wallet and an initial balance of
-  `100.00` units.
-- Atomic wallet-to-wallet transfers using a single database transaction and
-  PostgreSQL row-level locks.
-- Validation for missing wallets, non-positive amounts, self-transfers, and
-  insufficient funds.
-- Redis-backed wallet read cache with a 60-second TTL and post-transfer
-  invalidation.
-- Required `Idempotency-Key` protection for transfer requests with a 24-hour Redis
-  reservation.
-- Asynchronous transfer notifications through RabbitMQ and Celery with automatic
-  retry and exponential backoff.
-- Nginx reverse proxy with gzip, request buffering, timeouts, and transfer rate
-  limiting.
-- Prometheus metrics, a provisioned Grafana dashboard, Alertmanager rules, and
-  PostgreSQL/Redis/RabbitMQ exporters.
-- JSON logs and request correlation through `X-Request-ID` across the API and
-  Celery worker.
-- Optional Sentry error and performance monitoring with sensitive-value filtering.
-- Docker Compose for the complete local stack.
-- Kubernetes manifests with HPA for the API and KEDA scaling for Celery workers.
-- Automated linting, formatting, type checking, tests, security scanning, and image
-  builds in GitHub Actions.
-
-## Architecture
-
-```mermaid
-flowchart LR
-    Client["Browser / API client"] --> Nginx["Nginx :8081"]
-    Nginx --> API["FastAPI application"]
-
-    API --> PostgreSQL[(PostgreSQL)]
-    API --> Redis[("Redis<br/>wallet cache + idempotency")]
-    API --> RabbitMQ["RabbitMQ"]
-    RabbitMQ --> Worker["Celery worker"]
-    Worker --> Redis
-
-    Prometheus["Prometheus"] -. "scrapes" .-> API
-    Prometheus -. "scrapes" .-> Exporters["PostgreSQL / Redis / RabbitMQ exporters"]
-    Grafana["Grafana"] --> Prometheus
-    Prometheus --> Alertmanager["Alertmanager"]
-```
-
-The application follows a layered structure:
-
-- **API layer** parses HTTP input and formats responses.
-- **Use-case layer** coordinates caching, idempotency, and post-transfer side
-  effects.
-- **Service layer** implements business rules and transaction-safe database
-  operations.
-- **Persistence layer** contains SQLAlchemy models, sessions, and transaction
-  helpers.
-- **Infrastructure layer** integrates Redis, RabbitMQ, Celery, Sentry, metrics,
-  containers, and Kubernetes.
+Backend service for user accounts, wallets, and atomic wallet-to-wallet
+transfers. The project combines authentication and resource ownership with
+transaction safety, Redis idempotency, asynchronous notifications, monitoring,
+Docker Compose, and Kubernetes manifests.
 
 ## Technology stack
 
-| Area | Technology | Purpose |
-| --- | --- | --- |
-| API | FastAPI, Uvicorn, Pydantic | HTTP API, validation, OpenAPI documentation |
-| Persistence | SQLAlchemy 2, PostgreSQL, Psycopg | Relational data and atomic transfers |
-| Cache | Redis | Wallet read cache, idempotency reservations, Celery result backend |
-| Messaging | RabbitMQ, Celery | Asynchronous notification processing |
-| Edge | Nginx | Reverse proxy, gzip, rate limiting, and timeouts |
-| Observability | Prometheus, Grafana, Alertmanager, Sentry | Metrics, dashboards, alerts, traces, and errors |
-| Runtime | Docker, Docker Compose, Kubernetes | Reproducible local and clustered deployment |
-| Quality | Pytest, Ruff, MyPy, Bandit, pre-commit | Tests and automated code checks |
+- FastAPI and Pydantic
+- SQLAlchemy 2.0 and Alembic
+- PostgreSQL 15
+- Redis
+- RabbitMQ and Celery
+- Nginx
+- Prometheus, Grafana, Alertmanager, and Sentry
+- Docker Compose and Kubernetes
 
-The application supports Python 3.10 and newer. The Docker image uses Python 3.11.
+## Features
 
-## Quick start
+- Registration with username, email, and password
+- Login by username or email
+- Scrypt password hashing with a random salt
+- Short-lived JWT access tokens
+- Rotating refresh tokens stored in an HttpOnly cookie
+- Server-side refresh-token revocation and logout
+- One wallet per user with an initial balance of `100.00`
+- Ownership checks for profiles, wallets, and source wallets
+- Atomic transfers with row locking
+- Redis-backed idempotency protection
+- Wallet cache and post-commit cache invalidation
+- Celery notifications through RabbitMQ
+- Request IDs, structured logging, metrics, and Sentry integration
 
-### Prerequisites
+## Architecture
 
-- Docker Engine or Docker Desktop
-- Docker Compose v2 (`docker compose`)
+```text
+Client
+  |
+  v
+Nginx -- rate limiting and gzip
+  |
+  v
+FastAPI
+  |-- PostgreSQL: users, wallets, transfers, refresh tokens
+  |-- Redis: wallet cache and idempotency reservations
+  `-- RabbitMQ --> Celery worker: transfer notifications
+```
 
-### Start the complete stack
+The application is split into API, use-case, service, persistence, and
+infrastructure layers. API handlers parse HTTP input and dependencies; business
+rules and transaction boundaries live in services and use cases.
 
-The repository contains development defaults in `.env.example`, so no initial
-configuration is required:
+## Authentication and authorization
+
+Registration creates a user and wallet in one database transaction. Usernames
+and email addresses are normalized to lowercase and must be unique.
+
+Login accepts an `identifier`, which can contain either the username or email.
+The response contains an access token. The refresh token is set as an HttpOnly,
+SameSite=Lax cookie and is not returned in the JSON body.
+
+Access rules:
+
+- A user can read only their own profile.
+- A user can read only their own wallet and balance.
+- A user can transfer money only from their own wallet.
+- The destination wallet can belong to another user.
+- Requests without a valid access token return `401`.
+- Attempts to access another user's resources return `403`.
+
+Access tokens are stateless and are not stored in PostgreSQL. Only a SHA-256
+hash of each refresh token is stored. Refreshing rotates and revokes the old
+token; logout revokes the current refresh token.
+
+## API
+
+Interactive OpenAPI documentation is available at `/docs`.
+
+| Method | Path | Authentication | Description |
+| --- | --- | --- | --- |
+| `POST` | `/auth/register` | Public | Create an account and wallet |
+| `POST` | `/auth/login` | Public | Login by username or email |
+| `POST` | `/auth/refresh` | Refresh cookie | Rotate refresh token |
+| `POST` | `/auth/logout` | Refresh cookie | Revoke refresh token |
+| `GET` | `/auth/me` | Bearer token | Read current account |
+| `GET` | `/users/{user_id}` | Bearer token | Read own profile |
+| `GET` | `/wallets/{wallet_id}` | Bearer token | Read own wallet |
+| `POST` | `/transfers` | Bearer token | Transfer from own wallet |
+| `GET` | `/health` | Public | Health check |
+| `GET` | `/metrics` | Public | Prometheus metrics |
+
+The old anonymous `POST /users` endpoint no longer exists. Account creation must
+go through `/auth/register`.
+
+### Registration
 
 ```bash
-docker compose up --build
+curl -X POST http://localhost:8081/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "username": "alice",
+    "email": "alice@example.com",
+    "password": "correct-horse-battery-staple"
+  }'
 ```
 
-Wait until `transfer_app` becomes healthy, then verify the API:
+### Login
+
+Use `-c cookies.txt` to store the refresh cookie locally:
 
 ```bash
-curl http://localhost:8081/health
+curl -X POST http://localhost:8081/auth/login \
+  -H 'Content-Type: application/json' \
+  -c cookies.txt \
+  -d '{
+    "identifier": "alice",
+    "password": "correct-horse-battery-staple"
+  }'
 ```
 
-Expected response:
-
-```json
-{"status":"ok"}
-```
-
-### Available services
-
-| Service | URL |
-| --- | --- |
-| Browser UI | <http://localhost:8081/> |
-| Users UI | <http://localhost:8081/ui/users> |
-| Wallets UI | <http://localhost:8081/ui/wallets> |
-| Transfers UI | <http://localhost:8081/ui/transfers> |
-| Swagger UI | <http://localhost:8081/docs> |
-| ReDoc | <http://localhost:8081/redoc> |
-| Health check | <http://localhost:8081/health> |
-| Prometheus metrics | <http://localhost:8081/metrics> |
-| RabbitMQ management | <http://localhost:15672/> |
-| Prometheus | <http://localhost:9090/> |
-| Grafana | <http://localhost:3000/> |
-| Alertmanager | <http://localhost:9093/> |
-
-RabbitMQ uses `guest` / `guest` in the default local setup. Grafana uses its image
-defaults and prompts for a password change on first login.
-
-Inspect or stop the environment with:
+Copy `access_token` from the response:
 
 ```bash
-docker compose ps
-docker compose stop
+export ACCESS_TOKEN='paste-access-token-here'
 ```
 
-Use `docker compose down` to remove the containers. The development PostgreSQL
-service does not currently use a named volume, so removing its container also
-removes its database data.
-
-### Use a custom environment file
-
-Copy the example and point Compose to the new file.
-
-PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-$env:ENV_FILE = ".env"
-docker compose up --build
-```
-
-Bash:
+### Read the current user
 
 ```bash
-cp .env.example .env
-ENV_FILE=.env docker compose up --build
+curl http://localhost:8081/auth/me \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
-The values in `.env.example` are development credentials. Do not use them in a
-shared or production environment.
-
-## API usage
-
-### Endpoints
-
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/users` | Create a user and a wallet with a `100.00` initial balance |
-| `GET` | `/users/{user_id}` | Get a user together with wallet details |
-| `GET` | `/wallets/{wallet_id}` | Get a wallet, using Redis when caching is enabled |
-| `POST` | `/transfers` | Transfer funds between wallets |
-| `GET` | `/health` | Check API availability |
-| `GET` | `/metrics` | Export Prometheus metrics |
-
-Interactive request and response schemas are available in Swagger UI at
-<http://localhost:8081/docs>.
-
-### Create two users
-
-```bash
-curl -X POST http://localhost:8081/users
-curl -X POST http://localhost:8081/users
-```
-
-Example first response:
-
-```json
-{
-  "id": 1,
-  "created_at": "2026-07-29T10:00:00+00:00",
-  "wallet": {
-    "balance": 100.0
-  }
-}
-```
-
-Read each user to obtain the wallet IDs:
-
-```bash
-curl http://localhost:8081/users/1
-curl http://localhost:8081/users/2
-```
-
-Example response:
-
-```json
-{
-  "id": 1,
-  "created_at": "2026-07-29T10:00:00+00:00",
-  "wallet": {
-    "id": 1,
-    "balance": 100.0
-  }
-}
-```
-
-### Create a transfer
-
-`POST /transfers` accepts the transfer data as query parameters and requires an
-`Idempotency-Key` header. Use a new unique value, preferably a UUID, for every new
-operation.
+### Transfer money
 
 ```bash
 curl -X POST \
-  "http://localhost:8081/transfers?from_wallet_id=1&to_wallet_id=2&amount=25.00" \
-  -H "Idempotency-Key: 7f9864d4-2034-4b5d-9f0e-898609da73fd" \
-  -H "X-Request-ID: readme-example-001"
+  'http://localhost:8081/transfers?from_wallet_id=1&to_wallet_id=2&amount=25.00' \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Idempotency-Key: $(uuidgen)"
 ```
 
-Example response:
+Every transfer attempt requires a unique `Idempotency-Key`. Reusing the same key
+with the same request returns `409 Request in progress`; reusing it with a
+different payload returns `409 Idempotency-Key conflict`.
 
-```json
-{
-  "id": 1,
-  "from_wallet_id": 1,
-  "to_wallet_id": 2,
-  "amount": 25.0,
-  "created_at": "2026-07-29T10:01:00+00:00"
-}
-```
-
-Check the updated balances:
+### Refresh and logout
 
 ```bash
-curl http://localhost:8081/wallets/1
-curl http://localhost:8081/wallets/2
+curl -X POST http://localhost:8081/auth/refresh -b cookies.txt -c cookies.txt
+curl -X POST http://localhost:8081/auth/logout -b cookies.txt -c cookies.txt
 ```
 
-On a fresh database, the expected balances are `75.00` and `125.00`.
+## Environment configuration
 
-> On Windows PowerShell, use `curl.exe` for the examples above if `curl` is mapped
-> to `Invoke-WebRequest`.
+Create a local environment file. The commands below target Git Bash:
 
-### Error responses
+```bash
+cp .env.example .env
+sed -i "s|^AUTH_JWT_SECRET=.*|AUTH_JWT_SECRET=$(openssl rand -hex 32)|" .env
+```
 
-| Status | Typical cause |
-| --- | --- |
-| `400` | Non-positive amount or transfer to the same wallet |
-| `404` | User or wallet does not exist |
-| `409` | Insufficient funds or reused idempotency key |
-| `422` | Missing or invalid query/header value |
-| `500` | Unexpected server error; the response includes a request ID |
+Do not commit `.env`. It is excluded by both `.gitignore` and `.dockerignore`.
 
-## How a transfer is processed
+Important variables:
 
-1. Nginx accepts the request and applies the `/transfers` rate limit.
-2. FastAPI validates the query parameters and required `Idempotency-Key` header.
-3. Redis atomically reserves the idempotency key for 24 hours.
-4. The service sorts both wallet IDs and locks both wallet rows with
-   `SELECT ... FOR UPDATE` in a stable order.
-5. The service validates wallet existence, transfer direction, amount, and source
-   balance.
-6. The source wallet is debited, the destination wallet is credited, and a
-   transaction record is inserted in one database transaction.
-7. After commit, both wallet cache entries are invalidated.
-8. A notification task is published to RabbitMQ.
-9. The Celery worker processes the task and retries transient failures with
-   exponential backoff.
-
-Sorting and locking the wallet rows reduces deadlock risk and prevents concurrent
-requests from corrupting balances. A failed database operation rolls back the
-entire transfer.
-
-## Reliability and consistency
-
-### Atomic balance updates
-
-The debit, credit, and transaction record are committed together. There is no
-successful state in which only one wallet has been updated.
-
-### Idempotency behavior
-
-The current implementation uses Redis as a fail-closed reservation store:
-
-- a key is reserved atomically with `SET NX` for 24 hours;
-- reusing the same key and payload returns `409 A request is already in progress`;
-- reusing the key with different data returns `409 Idempotency-Key reuse with
-  different request data`;
-- a failed transfer removes its reservation so the operation can be retried;
-- an unavailable or disabled idempotency store rejects the transfer to avoid
-  accidental duplicate processing.
-
-The service does not currently persist and replay the original HTTP response.
-
-### Wallet caching
-
-`GET /wallets/{wallet_id}` checks Redis before PostgreSQL. Cached wallet data lives
-for 60 seconds and is invalidated for both wallets after every successful transfer.
-Wallet reads fall back to PostgreSQL if Redis caching fails.
-
-### Notification delivery
-
-The notification is enqueued after the transfer commits. A broker enqueue failure
-is logged and does not roll back the financial transaction. Once accepted by
-Celery, a failed notification task is retried up to five times with backoff.
-
-### Edge protection
-
-Nginx limits `/transfers` to 20 requests per second per client address with a burst
-of 5. It also applies gzip compression and a timeout hierarchy around the API.
-
-## Configuration
-
-The application loads settings through Pydantic Settings. Docker Compose uses
-`.env.example` unless `ENV_FILE` points to another file.
-
-| Variable | Default/example | Description |
+| Variable | Default/example | Purpose |
 | --- | --- | --- |
-| `ENV_FILE` | `.env.example` in Compose | Selects the environment file |
-| `APP_ENV` | `dev` | `local`, `dev`, `test`, `staging`, or `production` |
-| `POSTGRES_USER` | `postgres` | PostgreSQL container user |
-| `POSTGRES_PASSWORD` | `postgres` | PostgreSQL container password |
-| `POSTGRES_DB` | `transfer_db` | PostgreSQL database name |
-| `DATABASE_URL` | required | SQLAlchemy PostgreSQL or SQLite URL |
-| `REDIS_URL` | required | Redis URL for cache, idempotency, and Celery results |
-| `RABBITMQ_URL` | required | AMQP broker URL; `memory://` is accepted for tests |
-| `CACHE_ENABLED` | `false` in code, `true` in Compose | Enables Redis wallet caching and the idempotency client |
-| `LOG_LEVEL` | `INFO` | Python log level |
-| `NOTIFY_FAIL_RATE` | `0.0` | Probability from `0.0` to `1.0` used to simulate notification failure |
-| `NOTIFY_DELAY_SEC` | `2.0` | Artificial notification processing delay |
-| `SENTRY_DSN` | empty | Enables Sentry when set |
-| `SENTRY_ENVIRONMENT` | `APP_ENV` | Sentry environment name |
-| `SENTRY_RELEASE` | empty | Git SHA or deployed image version |
-| `SENTRY_TRACES_SAMPLE_RATE` | `0.0` | Trace sample rate from `0.0` to `1.0` |
-| `SENTRY_PROFILES_SAMPLE_RATE` | `0.0` | Profile sample rate from `0.0` to `1.0` |
-| `SENTRY_EXTRA_SENSITIVE_KEYS` | empty | Additional comma-separated or JSON-array keys to filter |
+| `DATABASE_URL` | PostgreSQL URL | Application and Alembic database |
+| `REDIS_URL` | `redis://redis:6379/0` | Cache and idempotency store |
+| `RABBITMQ_URL` | RabbitMQ URL | Celery broker |
+| `AUTH_JWT_SECRET` | No safe default | JWT signing secret, at least 32 characters |
+| `AUTH_ACCESS_TOKEN_MINUTES` | `15` | Access-token lifetime |
+| `AUTH_REFRESH_TOKEN_DAYS` | `7` | Refresh-token lifetime |
+| `AUTH_ISSUER` | `transfer-system` | JWT issuer |
+| `CACHE_ENABLED` | `true` | Enable Redis cache/idempotency |
+| `NOTIFY_FAIL_RATE` | `0.0` | Notification failure simulation |
+| `SENTRY_DSN` | Empty | Optional Sentry project DSN |
 
-See [docs/sentry.md](docs/sentry.md) for Sentry configuration and live verification.
+Use a different JWT secret for every environment. In staging and production,
+refresh cookies are also marked `Secure`.
 
-## Observability
+## Run with Docker Compose
 
-### Metrics and dashboards
-
-Prometheus scrapes the FastAPI application, PostgreSQL exporter, Redis exporter,
-and RabbitMQ Prometheus plugin every five seconds. Grafana automatically provisions
-the Prometheus datasource and the **Transfer System Overview** dashboard.
-
-Application metrics include:
-
-- request totals, outcomes, exceptions, and duration histograms;
-- successful transfer count and total transferred amount;
-- wallet, user, and transaction counts;
-- total ledger balance and system metric collection status;
-- wallet cache hits and misses;
-- database query duration and errors by operation.
-
-Alert rules cover API 5xx rate, p95 latency, RabbitMQ backlog, database query
-errors, and failures while collecting system metrics. The local Alertmanager has a
-default receiver without an external notification integration.
-
-### Logs and request correlation
-
-The API and worker emit structured JSON logs. Send an optional `X-Request-ID`
-header to correlate a request with its transfer and Celery notification logs. If
-the header is missing, the API generates an ID and returns it in the response.
-Every HTTP response also emits an `http_request_completed` access log with the
-request method, path, response status, duration in milliseconds, and request ID.
-Error response bodies include the same value in their `request_id` field.
-
-### Sentry
-
-Sentry is disabled when `SENTRY_DSN` is empty. When enabled, the integration
-captures FastAPI, Celery, SQLAlchemy, and Redis errors and traces. Authorization,
-cookies, passwords, tokens, idempotency keys, and configured custom fields are
-filtered before events are sent.
-
-## Development and testing
-
-### Install dependencies
+Build the application images:
 
 ```bash
-python -m venv .venv
+docker compose build app worker
 ```
 
-Activate the environment with `source .venv/bin/activate` on Linux/macOS or
-`.\.venv\Scripts\Activate.ps1` in PowerShell, then install the dependencies:
+Start infrastructure first:
 
 ```bash
-python -m pip install --upgrade pip
+docker compose up -d db redis rabbitmq
+```
+
+Apply database migrations:
+
+```bash
+docker compose run --rm --no-deps app alembic upgrade head
+```
+
+Start the remaining services:
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+Local endpoints:
+
+- API through Nginx: <http://localhost:8081>
+- OpenAPI docs: <http://localhost:8081/docs>
+- RabbitMQ UI: <http://localhost:15672>
+- Prometheus: <http://localhost:9090>
+- Grafana: <http://localhost:3000>
+- Alertmanager: <http://localhost:9093>
+
+Stop the environment without deleting PostgreSQL data:
+
+```bash
+docker compose down
+```
+
+## Database migrations
+
+Alembic is the only mechanism used to create or update the runtime database.
+The application no longer calls `Base.metadata.create_all()` at startup.
+
+Create a revision after changing SQLAlchemy models:
+
+```bash
+alembic revision --autogenerate -m "describe the change"
+```
+
+Apply migrations locally:
+
+```bash
+alembic upgrade head
+```
+
+Check the current revision:
+
+```bash
+alembic current
+```
+
+For a database created before Alembic was introduced, mark the existing
+pre-authentication schema once, then upgrade:
+
+```bash
+alembic stamp 20260830_01
+alembic upgrade head
+```
+
+Do not run the stamp command on an empty database. A new database should use
+only `alembic upgrade head`.
+
+## Transfer guarantees
+
+A transfer performs the following operations inside one database transaction:
+
+1. Lock both wallets using `SELECT ... FOR UPDATE`.
+2. Verify that both wallets exist.
+3. Verify ownership of the source wallet.
+4. Verify that the amount is positive and funds are sufficient.
+5. Debit the source wallet.
+6. Credit the destination wallet.
+7. Insert the transaction record.
+8. Commit all changes together.
+
+If any step fails, the database transaction is rolled back. After a successful
+commit, wallet cache entries are invalidated and a Celery notification is
+published.
+
+Redis reserves each idempotency key for 24 hours within the authenticated
+user's namespace. Different users can safely submit the same client-generated
+key. The service fails closed when the idempotency store is unavailable,
+preventing an unprotected duplicate transfer.
+
+## Testing and quality checks
+
+Create and activate a virtual environment in Git Bash:
+
+```bash
+python -m venv venv
+source venv/Scripts/activate
 python -m pip install -r requirements.txt -r requirements-dev.txt
 ```
 
-### Run tests
+Run the full test suite:
 
-PowerShell:
-
-```powershell
-$env:ENV_FILE = ".env.test"
+```bash
 python -m pytest -q
 ```
 
-Bash:
+Run static checks:
 
 ```bash
-ENV_FILE=.env.test python -m pytest -q
+python -m ruff check app tests alembic
+python -m ruff format --check app tests alembic
+python -m mypy app
+python -m bandit -r app -q
 ```
 
-The test configuration uses in-memory SQLite, disables caching, uses an in-memory
-broker, and removes the artificial notification delay.
+Tests cover authentication, username/email login, token rotation, logout,
+ownership checks, migration upgrade/downgrade, atomic transfers, insufficient
+funds, idempotency, caching, Celery context, metrics, and error handling.
 
-### Run code-quality checks
-
-```bash
-ruff check .
-ruff format --check .
-mypy app
-bandit -r app
-```
-
-Install the repository hooks with:
-
-```bash
-pre-commit install
-pre-commit run --all-files
-```
-
-GitHub Actions runs code-quality checks, tests, Bandit, and a Docker image build on
-pushes and pull requests.
-
-## Load testing
-
-The repository includes an asynchronous load-test helper. Against Docker Compose,
-run:
-
-```bash
-python scripts/load_test.py api \
-  --base-url http://localhost:8081 \
-  --users 20 \
-  --requests 500 \
-  --concurrency 25 \
-  --rps 20
-```
-
-The script creates users and wallets, sends transfers with unique idempotency keys,
-and prints throughput, status counts, and p50/p95/p99 latency. Keep `--rps` at 20
-or below when testing through Nginx, or expect `429 Too Many Requests` responses.
-
-Kubernetes-specific API and worker load scenarios are documented in
-[k8s/README.md](k8s/README.md).
+The API load-test helper registers temporary users, logs each user in, and sends
+every transfer with the source wallet owner's Bearer token. The generated load
+accounts remain in the target database so their balances and transactions can be
+inspected after a run; use a disposable environment for load testing.
 
 ## Kubernetes
 
-The `k8s/` directory contains manifests for:
+Local Kubernetes manifests are stored in `k8s/`. They include PostgreSQL with a
+PVC, Redis, RabbitMQ, the application, Celery worker, Nginx, HPA, KEDA, load-test
+jobs, and a dedicated Alembic migration Job.
 
-- the namespace, application, worker, Nginx, PostgreSQL, Redis, and RabbitMQ;
-- ConfigMap and local secret templates;
-- CPU-based API autoscaling through HPA;
-- RabbitMQ queue-length worker autoscaling through KEDA;
-- API and worker load jobs.
+The migration Job must complete before the application and worker deployments
+are rolled out. See [k8s/README.md](k8s/README.md) for the deployment sequence.
 
-The manifests target local clusters such as `kind` and use a locally loaded
-`transfer-system:latest` image. Metrics Server is required for HPA, and KEDA plus
-its CRDs are required for worker autoscaling.
+Docker Desktop Kubernetes must be enabled before using the local
+`docker-desktop` context.
 
-Follow the complete deployment and load-testing guide in
-[k8s/README.md](k8s/README.md).
+## Observability
+
+The Compose environment includes Prometheus, Grafana, Alertmanager, PostgreSQL
+exporter, Redis exporter, and RabbitMQ Prometheus metrics.
+
+The provisioned dashboard covers request rate, error ratio, p95/p99 latency,
+transfer throughput and amount, wallet cache behavior, ledger balance, database
+latency, RabbitMQ queue depth, PostgreSQL connections, and Redis memory.
+
+Alert rules cover API errors and latency, ledger consistency, database errors,
+RabbitMQ backlog, and metric collection failures.
+
+Application and worker logs are emitted as structured JSON and include the
+current request ID. Error responses also return the same ID so a client-visible
+failure can be correlated with backend and Celery logs.
+
+Verify the JSON log format locally:
+
+```bash
+python scripts/verify_json_logging.py
+```
+
+With the Docker environment running, verify request and failure correlation:
+
+```bash
+bash scripts/verify_live_failure_logging.sh
+```
 
 ## Project structure
 
 ```text
-transfer-system/
-|-- app/
-|   |-- api/                 # FastAPI routers
-|   |-- core/                # Settings, logging, middleware, metrics, Sentry, Celery
-|   |-- db/                  # SQLAlchemy models, sessions, transactions, migrations
-|   |-- services/            # Business rules and domain exceptions
-|   |-- tasks/               # Celery notification tasks
-|   |-- usecases/            # Cache/idempotency and workflow orchestration
-|   |-- cache.py             # Redis cache abstraction
-|   |-- idempotency.py       # Redis idempotency manager
-|   `-- main.py              # Application entry point
-|-- static/                  # Browser UI and static assets
-|-- tests/                   # API, service, cache, logging, metrics, and Sentry tests
-|-- observability/           # Prometheus rules, Grafana provisioning, Alertmanager
-|-- nginx/                   # Reverse proxy configuration
-|-- k8s/                     # Kubernetes runtime and load-test manifests
-|-- scripts/                 # Load testing and Sentry verification
-|-- docs/                    # Extended documentation
-|-- docker-compose.yml       # Complete local environment
-|-- Dockerfile               # API/worker image
-|-- prometheus.yml           # Prometheus scrape configuration
-|-- pyproject.toml           # Ruff and Pytest configuration
-`-- requirements*.txt        # Runtime and development dependencies
+alembic/                 Alembic environment and revisions
+app/
+  api/                   FastAPI routers and authentication dependency
+  core/                  Settings, JWT/password security, logging, metrics
+  db/                    SQLAlchemy models, session, transaction helpers
+  schemas/               Request and response schemas
+  services/              Authentication and business rules
+  usecases/              Transfer and wallet orchestration
+  tasks/                 Celery tasks
+k8s/                     Kubernetes manifests and migration Job
+nginx/                   Reverse-proxy configuration
+observability/           Grafana and Prometheus configuration
+tests/                   Unit and integration tests
 ```
 
-## Production considerations
+## Security notes
 
-Before deploying this project as a real money system, address at least the
-following:
-
-- Add authentication, authorization, account ownership, and an audit policy.
-- Replace development credentials and Kubernetes secret templates with a managed
-  secret store.
-- Use TLS for public traffic and encrypted connections to infrastructure services.
-- Add a managed migration workflow; the application currently calls
-  `Base.metadata.create_all()` during startup.
-- Add durable PostgreSQL storage, backups, restore testing, and disaster recovery.
-- Decide on a monetary currency model, precision rules, limits, and compliance
-  requirements.
-- Persist and replay completed idempotent responses if clients require standard
-  retry semantics.
-- Use a transactional outbox or equivalent mechanism if notification publication
-  must be guaranteed after a database commit.
-- Configure real Alertmanager receivers and production Sentry sampling rates.
-- Pin, scan, and regularly update container images instead of using floating
-  `latest` tags for observability services.
+- Never commit `.env`, `k8s/secrets.yaml`, private keys, or access tokens.
+- Rotate `AUTH_JWT_SECRET` if it is exposed.
+- Existing access tokens remain valid until expiration unless the signing secret
+  is rotated.
+- Logout revokes refresh tokens; it does not maintain an access-token denylist.
+- Protect `/metrics` at the ingress or network layer in non-local environments.
+- The included secrets and passwords in example files are placeholders for
+  local development only.

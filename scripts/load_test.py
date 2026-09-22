@@ -32,6 +32,7 @@ DEFAULT_BASE_URL = "http://localhost:8080"
 class WalletRef:
     id: int
     user_id: int
+    access_token: str
 
 
 @dataclass(frozen=True)
@@ -54,15 +55,32 @@ def build_idempotency_key(prefix: str, index: int) -> str:
 
 
 async def create_user(client: httpx.AsyncClient) -> WalletRef:
-    response = await client.post("/users")
+    suffix = uuid.uuid4().hex
+    username = f"load_{suffix}"
+    password = f"LoadTest-{suffix}"
+    response = await client.post(
+        "/auth/register",
+        json={
+            "username": username,
+            "email": f"{username}@example.com",
+            "password": password,
+        },
+    )
     response.raise_for_status()
-    user_id = int(response.json()["id"])
+    registration = response.json()
 
-    response = await client.get(f"/users/{user_id}")
+    response = await client.post(
+        "/auth/login",
+        json={"identifier": username, "password": password},
+    )
     response.raise_for_status()
-    data = response.json()
+    access_token = str(response.json()["access_token"])
 
-    return WalletRef(id=int(data["wallet"]["id"]), user_id=user_id)
+    return WalletRef(
+        id=int(registration["wallet"]["id"]),
+        user_id=int(registration["id"]),
+        access_token=access_token,
+    )
 
 
 async def seed_wallets(
@@ -77,14 +95,16 @@ async def seed_wallets(
     return await asyncio.gather(*(create_one() for _ in range(users)))
 
 
-def choose_transfer_wallets(wallets: list[WalletRef], index: int) -> tuple[int, int]:
+def choose_transfer_wallets(
+    wallets: list[WalletRef], index: int
+) -> tuple[WalletRef, WalletRef]:
     from_index = index % len(wallets)
     to_index = (from_index + 1) % len(wallets)
 
     if index % 2:
         from_index, to_index = to_index, from_index
 
-    return wallets[from_index].id, wallets[to_index].id
+    return wallets[from_index], wallets[to_index]
 
 
 async def post_transfer(
@@ -98,20 +118,21 @@ async def post_transfer(
     if rps > 0:
         await asyncio.sleep(index / rps)
 
-    from_wallet_id, to_wallet_id = choose_transfer_wallets(wallets, index)
+    from_wallet, to_wallet = choose_transfer_wallets(wallets, index)
     started = time.perf_counter()
 
     try:
         response = await client.post(
             "/transfers",
             params={
-                "from_wallet_id": from_wallet_id,
-                "to_wallet_id": to_wallet_id,
+                "from_wallet_id": from_wallet.id,
+                "to_wallet_id": to_wallet.id,
                 "amount": str(amount),
             },
             headers={
                 "Idempotency-Key": build_idempotency_key(key_prefix, index),
                 "X-Request-ID": f"load-{key_prefix}-{index}",
+                "Authorization": f"Bearer {from_wallet.access_token}",
             },
         )
         elapsed = time.perf_counter() - started

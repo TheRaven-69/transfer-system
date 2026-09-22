@@ -23,6 +23,38 @@ class Conflict(ServiceError):
     pass
 
 
+class Unauthorized(ServiceError):
+    """Authentication is required or credentials are invalid."""
+
+
+class Forbidden(ServiceError):
+    """The authenticated user cannot access the requested resource."""
+
+
+class InvalidCredentials(Unauthorized):
+    message = "Invalid username, email, or password"
+
+
+class InvalidToken(Unauthorized):
+    message = "Invalid or expired authentication token"
+
+
+class AuthenticationRequired(Unauthorized):
+    message = "Authentication required"
+
+
+class AccessDenied(Forbidden):
+    message = "Access denied"
+
+
+class UsernameAlreadyExists(Conflict):
+    message = "Username is already registered"
+
+
+class EmailAlreadyExists(Conflict):
+    message = "Email is already registered"
+
+
 class UserNotFound(NotFound):
     def __init__(self, user_id: int) -> None:
         self.user_id = user_id

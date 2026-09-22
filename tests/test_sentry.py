@@ -289,6 +289,7 @@ def test_idempotency_fingerprint_flows_from_api_to_celery_sentry_context(
     seeded_wallets,
     monkeypatch,
     fake_redis,
+    auth_headers_factory,
 ):
     raw_key = "raw-client-idempotency-key"
     expected_fingerprint = idempotency_key_fingerprint(raw_key)
@@ -313,7 +314,10 @@ def test_idempotency_fingerprint_flows_from_api_to_celery_sentry_context(
             "to_wallet_id": to_wallet.id,
             "amount": "10.00",
         },
-        headers={"Idempotency-Key": raw_key},
+        headers={
+            **auth_headers_factory(from_wallet.user_id),
+            "Idempotency-Key": raw_key,
+        },
     )
 
     assert response.status_code == 200

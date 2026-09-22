@@ -32,7 +32,7 @@ def test_reservation_cleanup_logs_redis_error_without_raw_key(caplog):
 
 
 def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(
-    client, db, seeded_wallets, monkeypatch, fake_redis
+    client, db, seeded_wallets, monkeypatch, fake_redis, auth_headers_factory
 ):
     monkeypatch.setattr(
         transfers_usecase,
@@ -41,7 +41,10 @@ def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(
     )
 
     w1, w2 = seeded_wallets
-    headers = {"Idempotency-Key": "abc-123"}
+    headers = {
+        **auth_headers_factory(w1.user_id),
+        "Idempotency-Key": "abc-123",
+    }
 
     r1 = client.post(
         "/transfers",
@@ -71,7 +74,7 @@ def test_idempotency_same_key_returns_same_transaction_and_no_double_debit(
 
 
 def test_idempotency_same_key_different_payload_conflict(
-    client, seeded_wallets, monkeypatch, fake_redis
+    client, seeded_wallets, monkeypatch, fake_redis, auth_headers_factory
 ):
     monkeypatch.setattr(
         transfers_usecase,
@@ -80,7 +83,10 @@ def test_idempotency_same_key_different_payload_conflict(
     )
 
     w1, w2 = seeded_wallets
-    headers = {"Idempotency-Key": "abc-999"}
+    headers = {
+        **auth_headers_factory(w1.user_id),
+        "Idempotency-Key": "abc-999",
+    }
 
     r1 = client.post(
         "/transfers",
@@ -101,13 +107,16 @@ def test_idempotency_same_key_different_payload_conflict(
     }
 
 
-def test_idempotency_key_is_required(client, seeded_wallets):
+def test_idempotency_key_is_required(client, seeded_wallets, auth_headers_factory):
     w1, w2 = seeded_wallets
 
     response = client.post(
         "/transfers",
         params={"from_wallet_id": w1.id, "to_wallet_id": w2.id, "amount": "10.00"},
-        headers={"X-Request-ID": "validation-request"},
+        headers={
+            **auth_headers_factory(w1.user_id),
+            "X-Request-ID": "validation-request",
+        },
     )
 
     assert response.status_code == 422
@@ -115,3 +124,44 @@ def test_idempotency_key_is_required(client, seeded_wallets):
         "detail": "Validation error",
         "request_id": "validation-request",
     }
+
+
+def test_idempotency_key_is_scoped_to_authenticated_user(
+    client, db, seeded_wallets, monkeypatch, fake_redis, auth_headers_factory
+):
+    monkeypatch.setattr(
+        transfers_usecase,
+        "get_idempotency_manager",
+        lambda: IdempotencyManager(fake_redis),
+    )
+    first_wallet, second_wallet = seeded_wallets
+    shared_key = "shared-client-generated-key"
+
+    first = client.post(
+        "/transfers",
+        params={
+            "from_wallet_id": first_wallet.id,
+            "to_wallet_id": second_wallet.id,
+            "amount": "10.00",
+        },
+        headers={
+            **auth_headers_factory(first_wallet.user_id),
+            "Idempotency-Key": shared_key,
+        },
+    )
+    second = client.post(
+        "/transfers",
+        params={
+            "from_wallet_id": second_wallet.id,
+            "to_wallet_id": first_wallet.id,
+            "amount": "1.00",
+        },
+        headers={
+            **auth_headers_factory(second_wallet.user_id),
+            "Idempotency-Key": shared_key,
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert db.scalar(select(func.count(Transaction.id))) == 2

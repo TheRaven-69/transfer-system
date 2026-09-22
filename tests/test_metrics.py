@@ -6,7 +6,8 @@ from sqlalchemy.orm import sessionmaker
 import app.core.metrics as metrics
 import app.db.session as db_session
 from app.core.metrics import system as system_metrics
-from app.db.models import Transaction, User, Wallet
+from app.db.models import Transaction, Wallet
+from tests.factories import make_user
 
 
 def test_refresh_system_metrics_collects_real_totals(monkeypatch, engine, tables):
@@ -20,7 +21,7 @@ def test_refresh_system_metrics_collects_real_totals(monkeypatch, engine, tables
     monkeypatch.setattr(db_session, "SessionLocal", session_local)
 
     with session_local() as db:
-        users = [User(), User(), User()]
+        users = [make_user(), make_user(), make_user()]
         db.add_all(users)
         db.commit()
 

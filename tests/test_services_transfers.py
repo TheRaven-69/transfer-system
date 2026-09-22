@@ -6,7 +6,7 @@ from kombu.exceptions import OperationalError  # type: ignore[import-untyped]
 from redis import RedisError
 
 import app.usecases.transfers as transfers_usecase
-from app.db.models import Transaction, User, Wallet
+from app.db.models import Transaction, Wallet
 from app.idempotency import IdempotencyManager, hash_payload
 from app.services.exceptions import (
     BadRequest,
@@ -17,6 +17,7 @@ from app.services.exceptions import (
 )
 from app.services.transfers import create_transfer
 from app.usecases.transfers import create_transfer_idempotent
+from tests.factories import make_user
 
 
 def test_post_transfer_side_effects_logs_broker_error(
@@ -70,7 +71,7 @@ def test_post_transfer_side_effects_does_not_hide_programming_error(monkeypatch)
 
 
 def _mk_user_and_wallet(db, balance: Decimal) -> Wallet:
-    user = User()
+    user = make_user()
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -194,7 +195,7 @@ def test_idempotent_transfer_redis_writes_request_hash(monkeypatch, db, fake_red
 
     create_transfer_idempotent(db, from_w.id, to_w.id, Decimal("10.00"), "redis-done")
 
-    raw = fake_redis.get("idem:transfer:redis-done")
+    raw = fake_redis.get("idem:transfer:internal:redis-done")
     assert raw is not None
 
     payload = {"from_wallet_id": from_w.id, "to_wallet_id": to_w.id, "amount": "10.00"}
@@ -230,7 +231,7 @@ def test_idempotent_transfer_existing_same_hash_raises_in_progress(
     to_w = _mk_user_and_wallet(db, Decimal("0.00"))
 
     fake_redis.set(
-        "idem:transfer:redis-processing",
+        "idem:transfer:internal:redis-processing",
         "same-hash",
     )
 
@@ -304,4 +305,4 @@ def test_idempotent_transfer_error_cleanup_deletes_processing_key(
     with pytest.raises(RuntimeError):
         create_transfer_idempotent(db, from_w.id, to_w.id, Decimal("5.00"), "cleanup-1")
 
-    assert fake_redis.get("idem:transfer:cleanup-1") is None
+    assert fake_redis.get("idem:transfer:internal:cleanup-1") is None

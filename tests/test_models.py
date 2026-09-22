@@ -2,9 +2,11 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from app.db.models import Base, Transaction, User, Wallet
+from tests.factories import make_user
 
 
 @pytest.fixture
@@ -21,7 +23,7 @@ def db_session():
 
 
 def test_create_user_and_wallet(db_session):
-    user = User()
+    user = make_user()
     wallet = Wallet(user=user)
 
     db_session.add(user)
@@ -36,10 +38,19 @@ def test_create_user_and_wallet(db_session):
     db_session.close()
 
 
+def test_user_credentials_are_required(db_session):
+    db_session.add(User())
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+
+    db_session.rollback()
+
+
 def test_create_transaction_between_wallets(db_session):
     """Test creating transaction between wallets"""
-    user1 = User()
-    user2 = User()
+    user1 = make_user()
+    user2 = make_user()
     wallet1 = Wallet(user=user1, balance=Decimal("100.00"))
     wallet2 = Wallet(user=user2, balance=Decimal("50.00"))
 
@@ -64,9 +75,9 @@ def test_create_transaction_between_wallets(db_session):
 
 def test_wallet_incoming_transactions_relationship(db_session):
     """Test relationship incoming transactions"""
-    user1 = User()
-    user2 = User()
-    user3 = User()
+    user1 = make_user()
+    user2 = make_user()
+    user3 = make_user()
     wallet1 = Wallet(user=user1, balance=Decimal("100.00"))
     wallet2 = Wallet(user=user2, balance=Decimal("50.00"))
     wallet3 = Wallet(user=user3, balance=Decimal("25.00"))
@@ -95,9 +106,9 @@ def test_wallet_incoming_transactions_relationship(db_session):
 
 def test_wallet_outging_transactions_relationship(db_session):
     """Test relationship outging transactions"""
-    user1 = User()
-    user2 = User()
-    user3 = User()
+    user1 = make_user()
+    user2 = make_user()
+    user3 = make_user()
     wallet1 = Wallet(user=user1, balance=Decimal("100.00"))
     wallet2 = Wallet(user=user2, balance=Decimal("50.00"))
     wallet3 = Wallet(user=user3, balance=Decimal("25.00"))

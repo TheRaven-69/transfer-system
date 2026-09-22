@@ -23,13 +23,13 @@ from app.core.middleware import (
 )
 from app.core.request_context import request_id_ctx
 from app.core.sentry import init_sentry
-from app.db.models import Base
-from app.db.session import engine
 from app.services.exceptions import (
     BadRequest,
     Conflict,
+    Forbidden,
     NotFound,
     ServiceError,
+    Unauthorized,
 )
 
 setup_logging()
@@ -83,10 +83,13 @@ def _error_response(
     headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     _track_exception(request, status_code, exc)
+    response_headers = dict(headers or {})
+    if status_code == 401:
+        response_headers.setdefault("WWW-Authenticate", "Bearer")
     return JSONResponse(
         status_code=status_code,
         content=_error_content(str(exc) if detail is None else detail),
-        headers=headers,
+        headers=response_headers or None,
     )
 
 
@@ -97,6 +100,10 @@ def _service_error_status(exc: ServiceError) -> int:
         return 404
     if isinstance(exc, Conflict):
         return 409
+    if isinstance(exc, Unauthorized):
+        return 401
+    if isinstance(exc, Forbidden):
+        return 403
     return 500
 
 
@@ -141,8 +148,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def service_exception_handler(request: Request, exc: ServiceError):
     return _error_response(request, _service_error_status(exc), exc)
 
-
-Base.metadata.create_all(bind=engine)
 
 app.include_router(router)
 

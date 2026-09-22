@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: transfer-migrate
+  namespace: transfer-system
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: transfer-migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: transfer-system:latest
+          imagePullPolicy: Never
+          command:
+            - /bin/sh
+            - -c
+            - >-
+              until python -c 'import os; from sqlalchemy import create_engine;
+              create_engine(os.environ["DATABASE_URL"]).connect().close()';
+              do sleep 2; done;
+              alembic upgrade head
+          envFrom:
+            - configMapRef:
+                name: transfer-system-config
+            - secretRef:
+                name: transfer-system-secrets
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
